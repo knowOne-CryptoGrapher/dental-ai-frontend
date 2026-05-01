@@ -14,11 +14,6 @@ const config = {
 let WebpackHealthPlugin;
 let setupHealthEndpoints;
 let healthPluginInstance;
-
-if (config.enableHealthCheck) {
-  WebpackHealthPlugin = require("./plugins/health-check/webpack-health-plugin");
-  setupHealthEndpoints = require("./plugins/health-check/health-endpoints");
-  healthPluginInstance = new WebpackHealthPlugin();
 }
 
 let webpackConfig = {
