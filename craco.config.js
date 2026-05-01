@@ -14,7 +14,7 @@ const config = {
 let WebpackHealthPlugin;
 let setupHealthEndpoints;
 let healthPluginInstance;
-}
+
 
 let webpackConfig = {
   eslint: {
