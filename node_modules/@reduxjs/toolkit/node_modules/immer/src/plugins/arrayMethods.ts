@@ -4,6 +4,7 @@ import {
 	loadPlugin,
 	markChanged,
 	prepareCopy,
+	handleCrossReference,
 	ProxyArrayState
 } from "../internal"
 
@@ -190,6 +191,30 @@ export function enableArrayMethods() {
 	}
 
 	/**
+	 * Calls handleCrossReference for each value being inserted into the array,
+	 * and marks the corresponding indices as assigned in `assigned_`.
+	 *
+	 * This ensures nested drafts inside inserted values (e.g. from spreading
+	 * a draft object) are properly finalized, matching the behavior of the
+	 * proxy set trap which calls handleCrossReference on every assignment.
+	 *
+	 * Without this, values containing draft proxies (like `{...state[0]}`)
+	 * pushed via the array methods plugin would have their nested drafts
+	 * revoked during finalization without being replaced by final values.
+	 */
+	function handleInsertedValues(
+		state: ProxyArrayState,
+		startIndex: number,
+		values: any[]
+	) {
+		for (let i = 0; i < values.length; i++) {
+			const index = startIndex + i
+			state.assigned_!.set(index, true)
+			handleCrossReference(state, index, values[i])
+		}
+	}
+
+	/**
 	 * Handles mutating operations that add/remove elements (push, pop, shift, unshift, splice).
 	 *
 	 * Operates directly on `state.copy_` without creating per-element proxies.
@@ -204,11 +229,23 @@ export function enableArrayMethods() {
 		args: any[]
 	) {
 		return executeArrayMethod(state, () => {
+			// For push/unshift, capture the length before the operation
+			// so we can compute insertion indices for handleCrossReference
+			const lengthBefore = state.copy_!.length
+
 			const result = (state.copy_! as any)[method](...args)
 
 			// Handle index reassignment for shifting methods
 			if (SHIFTING_METHODS.has(method as MutatingArrayMethod)) {
 				markAllIndicesReassigned(state)
+			}
+
+			// Handle cross-references for newly inserted values.
+			// push appends at the end, unshift inserts at the beginning.
+			if (method === "push" && args.length > 0) {
+				handleInsertedValues(state, lengthBefore, args)
+			} else if (method === "unshift" && args.length > 0) {
+				handleInsertedValues(state, 0, args)
 			}
 
 			// Return appropriate value based on method
@@ -285,6 +322,14 @@ export function enableArrayMethods() {
 							state.copy_!.splice(...(args as [number, number, ...any[]]))
 						)
 						markAllIndicesReassigned(state)
+						// Handle cross-references for inserted values (args from index 2+)
+						if (args.length > 2) {
+							const startIndex = normalizeSliceIndex(
+								args[0] ?? 0,
+								state.copy_!.length
+							)
+							handleInsertedValues(state, startIndex, args.slice(2))
+						}
 						return res
 					}
 				} else {
