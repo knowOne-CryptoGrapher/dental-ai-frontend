@@ -1,0 +1,26 @@
+{
+  "escalation_rules": [
+    {
+      "name": "insurance",
+      "keywords": ["insurance", "coverage", "claim", "preauthorization", "CDANet", "fee guide"],
+      "provider": "anthropic",
+      "model": "claude-3-7-sonnet"
+    },
+    {
+      "name": "clinical",
+      "keywords": ["diagnosis", "treatment", "symptom", "infection", "prescription", "procedure"],
+      "provider": "anthropic",
+      "model": "claude-3-7-sonnet"
+    },
+    {
+      "name": "uncertainty",
+      "keywords": ["not sure", "uncertain", "ambiguous", "confused"],
+      "provider": "anthropic",
+      "model": "claude-3-7-sonnet"
+    }
+  ],
+  "default": {
+    "provider": "openai",
+    "model": "gpt-4o-mini"
+  }
+}
