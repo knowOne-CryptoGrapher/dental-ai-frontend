@@ -8,7 +8,8 @@ import json
 # Load Environment Variables
 # -------------------------------------------------------------------
 
-load_dotenv("backend/.env", override=True)
+from pathlib import Path
+load_dotenv(Path(__file__).resolve().parent / ".env", override=True)
 
 # -------------------------------------------------------------------
 # Router Imports
@@ -19,7 +20,7 @@ from routers.billing_router import router as billing_router
 from routers.stripe_webhook_router import router as stripe_webhook_router
 from routers.onboarding_router import router as onboarding_router
 from routers.retell_router import router as retell_router
-from routers.llm_router import router as llm_router
+from routers.llm_router_api import router as llm_router
 
 # Additional routers based on your backend structure
 from routers.analytics_router import router as analytics_router
