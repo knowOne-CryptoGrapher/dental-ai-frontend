@@ -34,7 +34,7 @@ from routers.superadmin_router import router as superadmin_router
 from routers.retell_api_router import router as retell_api_router
 from routers.retell_webhook_router import router as retell_webhook_router
 from routers.llm_route_and_complete import router as route_and_complete_router
-app.include_router(route_and_complete_router)
+
 # -------------------------------------------------------------------
 # LLM Manager Initialization
 # -------------------------------------------------------------------
@@ -116,6 +116,7 @@ app.include_router(stripe_webhook_router)
 app.include_router(onboarding_router)
 app.include_router(retell_router)
 app.include_router(llm_router)
+app.include_router(route_and_complete_router)
 
 # Additional routers
 app.include_router(analytics_router)
