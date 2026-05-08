@@ -33,7 +33,8 @@ from routers.practice_config_router import router as practice_config_router
 from routers.superadmin_router import router as superadmin_router
 from routers.retell_api_router import router as retell_api_router
 from routers.retell_webhook_router import router as retell_webhook_router
-
+from routers.llm_route_and_complete import router as route_and_complete_router
+app.include_router(route_and_complete_router)
 # -------------------------------------------------------------------
 # LLM Manager Initialization
 # -------------------------------------------------------------------
