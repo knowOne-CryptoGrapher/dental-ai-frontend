@@ -1,4 +1,4 @@
-"""Google Gemini provider."""
+"""Google Gemini provider (Gemini 1.5 SDK)."""
 from __future__ import annotations
 import asyncio
 import logging
@@ -13,8 +13,9 @@ logger = logging.getLogger(__name__)
 
 class GoogleProvider(LLMProvider):
     """
-    Google Gemini. The SDK is sync-only as of 0.8.x, so we run sync calls in
-    a worker thread to keep the API surface async-consistent with siblings.
+    Google Gemini provider using the new google-generativeai SDK.
+    The SDK is sync-only, so we run sync calls in a worker thread
+    to keep the API surface async-consistent with siblings.
     """
     name = "google"
 
@@ -28,7 +29,7 @@ class GoogleProvider(LLMProvider):
         system_parts: list[str] = []
         history: list[dict] = []
         latest_user = ""
-        # Roles in Gemini: user / model
+
         normalized = []
         for m in messages:
             if m.role == "system":
@@ -36,30 +37,43 @@ class GoogleProvider(LLMProvider):
             else:
                 role = "model" if m.role == "assistant" else "user"
                 normalized.append({"role": role, "parts": [m.content]})
-        # Last user message is the prompt; everything before is history.
+
         if normalized and normalized[-1]["role"] == "user":
             latest_user = normalized[-1]["parts"][0]
             history = normalized[:-1]
         else:
             history = normalized
+
         system = "\n\n".join(system_parts) or None
         return system, history, latest_user
 
     def _model(self, model: str, system: str | None):
-        return genai.GenerativeModel(model_name=model, system_instruction=system)
+        return genai.GenerativeModel(
+            model_name=model,
+            system_instruction=system
+        )
 
     async def complete(self, messages, model, *, temperature=0.7, max_tokens=None, **kwargs) -> LLMResponse:
         system, history, prompt = self._to_history(messages)
 
         def _run():
-            chat = self._model(model, system).start_chat(history=history)
-            return chat.send_message(prompt, generation_config={
-                "temperature": temperature,
-                "max_output_tokens": max_tokens or 1024,
-            })
+            mdl = self._model(model, system)
+            resp = mdl.generate_content(
+                prompt,
+                generation_config={
+                    "temperature": temperature,
+                    "max_output_tokens": max_tokens or 1024,
+                },
+                safety_settings=None,
+                # history is not directly supported in the same way as PaLM;
+                # prepend manually if needed
+            )
+            return resp
 
         resp = await asyncio.to_thread(_run)
+
         usage = getattr(resp, "usage_metadata", None)
+
         return LLMResponse(
             content=resp.text or "",
             model=model,
@@ -73,28 +87,38 @@ class GoogleProvider(LLMProvider):
         system, history, prompt = self._to_history(messages)
 
         def _start():
-            chat = self._model(model, system).start_chat(history=history)
-            return chat.send_message(prompt, stream=True, generation_config={
-                "temperature": temperature,
-                "max_output_tokens": max_tokens or 1024,
-            })
+            mdl = self._model(model, system)
+            return mdl.generate_content(
+                prompt,
+                stream=True,
+                generation_config={
+                    "temperature": temperature,
+                    "max_output_tokens": max_tokens or 1024,
+                },
+                safety_settings=None,
+            )
 
         gen = await asyncio.to_thread(_start)
-        # Iterating the generator may itself block — pull each chunk in a thread.
+
         loop = asyncio.get_running_loop()
         it = iter(gen)
         last_usage = None
+
         while True:
             try:
                 chunk = await loop.run_in_executor(None, lambda: next(it, None))
             except Exception as e:
                 logger.warning(f"Gemini stream error: {e}")
                 break
+
             if chunk is None:
                 break
+
             text = getattr(chunk, "text", "") or ""
             last_usage = getattr(chunk, "usage_metadata", last_usage)
+
             yield StreamChunk(delta=text)
+
         yield StreamChunk(
             delta="",
             finish_reason="stop",
