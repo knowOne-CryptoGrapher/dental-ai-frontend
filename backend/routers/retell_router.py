@@ -2,25 +2,26 @@
 Retell conversational router — Amanda AI receptionist
 """
 
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Body, HTTPException
 from pydantic import BaseModel, ValidationError
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict, Any
 import logging
 
 # ------------------------------------------------------------
 # CORRECT ABSOLUTE IMPORTS (Railway-safe)
 # ------------------------------------------------------------
-from backend.db import get_db
-from backend.analytics import log_conversation_event
-from backend.emergency import detect_emergency
+from db import get_db
+from analytics import log_conversation_event
+from emergency import detect_emergency
 
-from backend.models import AppointmentRequest, InsuranceInfo, ProviderInfo
-from backend.plans import get_plan
+from models import AppointmentRequest, InsuranceInfo, ProviderInfo
+from plans import get_plan
 
-from backend.llm.base import ChatMessage
-from backend.llm.router import get_default_router
-from backend.llm.registry import get_provider
+from llm.base import ChatMessage
+from llm.router import get_default_router
+from llm.registry import get_provider
+
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/retell", tags=["Retell"])
@@ -35,7 +36,7 @@ class RetellEvent(BaseModel):
     call_id: str
     user_message: Optional[str] = None
     transcript: Optional[list] = None
-    metadata: Optional[dict] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 
 # ============================================================
@@ -52,8 +53,8 @@ Clinic Details:
 - Address: {provider.address}
 - Phone: {provider.phone}
 - Hours: {provider.hours}
-- Services: {", ".join(provider.services)}
-- Insurance Accepted: {", ".join(provider.insurance)}
+- Services: {", ".join(provider.services or [])}
+- Insurance Accepted: {", ".join(provider.insurance or [])}
 
 Rules:
 1. Never confirm an appointment — only log requests.
@@ -156,24 +157,35 @@ async def process_user_message(
 # ============================================================
 
 @router.post("/webhook")
-async def retell_webhook(request: Request):
+async def retell_webhook(payload: dict = Body(...)):
+    """
+    FastAPI-safe Retell webhook:
+    - Always receives a dict
+    - Validates via Pydantic
+    - Never crashes on missing fields
+    """
 
+    # Validate payload structure
     try:
-        payload = await request.json()
         event = RetellEvent(**payload)
     except ValidationError:
         raise HTTPException(status_code=400, detail="Invalid Retell payload")
 
-    provider_data = event.metadata.get("provider") if event.metadata else None
+    # Provider metadata
+    metadata = event.metadata or {}
+    provider_data = metadata.get("provider")
     if not provider_data:
         raise HTTPException(status_code=400, detail="Missing provider metadata")
 
+    # Parse provider
     provider = ProviderInfo(**provider_data)
 
-    practice_id = event.metadata.get("practice_id") or provider_data.get("practice_id")
+    # Practice ID
+    practice_id = metadata.get("practice_id") or provider_data.get("practice_id")
     if not practice_id:
         raise HTTPException(status_code=400, detail="Missing practice_id")
 
+    # Only process user messages
     if event.event != "user_message":
         logger.info(f"Ignoring Retell event type={event.event}")
         return {"status": "ignored"}
@@ -181,6 +193,7 @@ async def retell_webhook(request: Request):
     if not event.user_message:
         raise HTTPException(status_code=400, detail="Missing user_message")
 
+    # Process
     ai_response = await process_user_message(
         call_id=event.call_id,
         message=event.user_message,
@@ -196,9 +209,8 @@ async def retell_webhook(request: Request):
 # ============================================================
 
 @router.post("/transcript")
-async def retell_transcript(request: Request):
+async def retell_transcript(payload: dict = Body(...)):
 
-    payload = await request.json()
     call_id = payload.get("call_id")
     transcript = payload.get("transcript")
     practice_id = payload.get("practice_id")

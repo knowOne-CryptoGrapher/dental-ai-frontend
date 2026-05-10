@@ -369,3 +369,35 @@ class OnboardingRequest(BaseModel):
     admin_email: EmailStr
     admin_password: str
     admin_full_name: str
+
+class AppointmentRequest(BaseModel):
+    patient_name: Optional[str] = None
+    patient_phone: Optional[str] = None
+    appointment_date: Optional[str] = None
+    appointment_time: Optional[str] = None
+    service_type: Optional[str] = None
+
+    @staticmethod
+    def extract(message: str):
+        # TODO: implement NLP extraction later
+        return None
+
+
+class InsuranceInfo(BaseModel):
+    carrier: Optional[str] = None
+    policy_number: Optional[str] = None
+    group_number: Optional[str] = None
+
+    @staticmethod
+    def extract(message: str):
+        return None
+
+
+class ProviderInfo(BaseModel):
+    name: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    hours: Optional[dict] = None
+    services: Optional[list] = None
+    insurance: Optional[list] = None
+    practice_id: Optional[str] = None
