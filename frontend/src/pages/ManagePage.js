@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 
 import {
   MapPin, Briefcase, UserCog, Plus, Edit2, Trash2, Loader2,
-  Shield, Mail, Clock
+  Shield, Clock
 } from 'lucide-react';
 
 export default function ManagePage() {
@@ -137,6 +137,7 @@ export default function ManagePage() {
           sunday: []
         },
         on_call: provider.on_call || false,
+        specialties: provider.specialties || [],
         role: provider.role || 'dentist'
       });
       setEditingItem(provider);
@@ -464,9 +465,4 @@ export default function ManagePage() {
 
                     <div>
                       <p className="text-sm font-semibold text-gray-900">{u.full_name}</p>
-                      <p className="text-xs text-gray-500">{u.email}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Badge className
+                      <p className="text-xs text-gray-500">{
