@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { usimport React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/button';
@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
   const { login, register } = useAuth();
   const navigate = useNavigate();
 
@@ -23,6 +24,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setLoading(true);
+
     try {
       if (isRegister) {
         await register(email, password, fullName, practiceName);
@@ -40,6 +42,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-teal-50/30 to-cyan-50/20 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
+
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-teal-600 mb-4 shadow-lg shadow-teal-200">
@@ -51,16 +54,19 @@ export default function LoginPage() {
 
         <Card className="shadow-xl shadow-gray-200/50 border-gray-200/80">
           <CardHeader className="pb-4">
-            <CardTitle className="text-lg">{isRegister ? 'Create Account' : 'Welcome Back'}</CardTitle>
+            <CardTitle className="text-lg">
+              {isRegister ? 'Create Account' : 'Welcome Back'}
+            </CardTitle>
             <CardDescription>
               {isRegister
                 ? 'Set up your dental practice account'
-                : 'Sign in to your practice dashboard'
-              }
+                : 'Sign in to your practice dashboard'}
             </CardDescription>
           </CardHeader>
+
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
+
               {isRegister && (
                 <>
                   <div className="space-y-2">
@@ -73,6 +79,7 @@ export default function LoginPage() {
                       required
                     />
                   </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="practiceName">Practice Name</Label>
                     <Input
@@ -144,20 +151,26 @@ export default function LoginPage() {
               >
                 {isRegister
                   ? 'Already have an account? Sign in'
-                  : "Don't have an account? Register"
-                }
+                  : "Don't have an account? Register"}
               </button>
+
               {!isRegister && (
                 <div>
-                  <a href="/signup" className="text-sm text-slate-500 hover:text-teal-600 underline" data-testid="wizard-signup-link">
+                  <a
+                    href="/signup"
+                    className="text-sm text-slate-500 hover:text-teal-600 underline"
+                    data-testid="wizard-signup-link"
+                  >
                     Set up a new clinic with onboarding wizard →
                   </a>
                 </div>
               )}
             </div>
+
           </CardContent>
         </Card>
       </div>
     </div>
   );
 }
+
