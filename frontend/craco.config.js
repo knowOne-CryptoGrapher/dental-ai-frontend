@@ -15,7 +15,6 @@ let WebpackHealthPlugin;
 let setupHealthEndpoints;
 let healthPluginInstance;
 
-
 let webpackConfig = {
   eslint: {
     configure: {
@@ -28,11 +27,11 @@ let webpackConfig = {
   },
   webpack: {
     alias: {
-      '@': path.resolve(__dirname, 'src'),
+      // ⭐ FIXED: Alias now points to the REAL src folder
+      '@': path.resolve(__dirname, 'frontend/src'),
     },
     configure: (webpackConfig) => {
-
-      // Add ignored patterns to reduce watched directories
+      // Reduce watched directories
       webpackConfig.watchOptions = {
         ...webpackConfig.watchOptions,
         ignored: [
@@ -45,7 +44,7 @@ let webpackConfig = {
         ],
       };
 
-      // Add health check plugin to webpack if enabled
+      // Add health check plugin if enabled
       if (config.enableHealthCheck && healthPluginInstance) {
         webpackConfig.plugins.push(healthPluginInstance);
       }
@@ -55,18 +54,16 @@ let webpackConfig = {
   },
 };
 
+// Dev server config
 webpackConfig.devServer = (devServerConfig) => {
-  // Add health check endpoints if enabled
   if (config.enableHealthCheck && setupHealthEndpoints && healthPluginInstance) {
     const originalSetupMiddlewares = devServerConfig.setupMiddlewares;
 
     devServerConfig.setupMiddlewares = (middlewares, devServer) => {
-      // Call original setup if exists
       if (originalSetupMiddlewares) {
         middlewares = originalSetupMiddlewares(middlewares, devServer);
       }
 
-      // Setup health endpoints
       setupHealthEndpoints(devServer, healthPluginInstance);
 
       return middlewares;
