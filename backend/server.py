@@ -1,14 +1,15 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
 import os
 import json
+from dotenv import load_dotenv
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 # -------------------------------------------------------------------
-# Load Environment Variables
+# Load Environment Variables (bulletproof)
 # -------------------------------------------------------------------
 
-load_dotenv("backend/.env", override=True)
+# Load .env from the backend folder (same method that worked in your test)
+load_dotenv(".env", override=True)
 
 # -------------------------------------------------------------------
 # Router Imports
@@ -19,9 +20,9 @@ from routers.billing_router import router as billing_router
 from routers.stripe_webhook_router import router as stripe_webhook_router
 from routers.onboarding_router import router as onboarding_router
 from routers.retell_router import router as retell_router
-from routers.llm_router import router as llm_router
+from routers.llm_router_api import router as llm_router
 
-# Additional routers based on your backend structure
+# Additional routers
 from routers.analytics_router import router as analytics_router
 from routers.appointment_router import router as appointment_router
 from routers.calllog_router import router as calllog_router

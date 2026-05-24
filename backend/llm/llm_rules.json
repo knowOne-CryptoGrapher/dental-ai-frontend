@@ -1,26 +1,22 @@
-{
-  "escalation_rules": [
-    {
-      "name": "insurance",
-      "keywords": ["insurance", "coverage", "claim", "preauthorization", "CDANet", "fee guide"],
-      "provider": "anthropic",
-      "model": "claude-3-7-sonnet"
-    },
-    {
-      "name": "clinical",
-      "keywords": ["diagnosis", "treatment", "symptom", "infection", "prescription", "procedure"],
-      "provider": "anthropic",
-      "model": "claude-3-7-sonnet"
-    },
-    {
-      "name": "uncertainty",
-      "keywords": ["not sure", "uncertain", "ambiguous", "confused"],
-      "provider": "anthropic",
-      "model": "claude-3-7-sonnet"
-    }
-  ],
-  "default": {
-    "provider": "openai",
-    "model": "gpt-4o-mini"
+[
+  {
+    "name": "insurance",
+    "keywords": ["insurance", "coverage", "claim", "preauthorization", "cdanet", "fee guide"],
+    "description": "Insurance, coverage, claims, CDANet, fee guides — escalate for accuracy."
+  },
+  {
+    "name": "clinical",
+    "keywords": ["diagnosis", "treatment", "symptom", "infection", "prescription", "procedure"],
+    "description": "Clinical or medical content — escalate to high‑accuracy model."
+  },
+  {
+    "name": "uncertainty",
+    "keywords": ["not sure", "uncertain", "ambiguous", "confused"],
+    "description": "User expresses uncertainty — escalate for clarity."
+  },
+  {
+    "name": "legal_longform",
+    "keywords": ["contract", "agreement", "acquisition", "legal", "terms", "binding"],
+    "description": "Legal or contractual content — escalate to Claude."
   }
-}
+]
