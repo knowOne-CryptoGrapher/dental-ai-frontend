@@ -1,17 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { api } from '../config/api';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Textarea } from '../components/ui/textarea';
-import { toast } from 'sonner';
 import {
-  Check, Copy, ChevronRight, ChevronLeft, Loader2, Phone,
-  Clock, AlertTriangle, ClipboardList, Sparkles
+  Check,
+  Copy,
+  ChevronRight,
+  ChevronLeft,
+  Loader2,
+  Phone,
+  Clock,
+  AlertTriangle,
+  ClipboardList,
+  Sparkles,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { toast } from 'sonner';
+import { useAuth } from '@/hooks/useAuth';
+import api from '@/lib/api';
 
 const STEPS = [
   { id: 0, name: 'Welcome', icon: Sparkles },
@@ -26,7 +33,15 @@ const STEPS = [
 ];
 
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
-const DAY_LABELS = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
+const DAY_LABELS = {
+  mon: 'Mon',
+  tue: 'Tue',
+  wed: 'Wed',
+  thu: 'Thu',
+  fri: 'Fri',
+  sat: 'Sat',
+  sun: 'Sun',
+};
 
 function CopyButton({ text, label = 'Copy' }) {
   const [copied, setCopied] = useState(false);
@@ -45,7 +60,11 @@ function CopyButton({ text, label = 'Copy' }) {
         }
       }}
     >
-      {copied ? <Check className="w-4 h-4 mr-1" /> : <Copy className="w-4 h-4 mr-1" />}
+      {copied ? (
+        <Check className="w-4 h-4 mr-1" />
+      ) : (
+        <Copy className="w-4 h-4 mr-1" />
+      )}
       {copied ? 'Copied!' : label}
     </Button>
   );
@@ -59,7 +78,7 @@ export default function OnboardingWizard() {
     onboardPractice,
     completeOnboarding,
     refreshPractice,
-    isSuperAdmin
+    isSuperAdmin,
   } = useAuth();
 
   const [step, setStep] = useState(user && practice ? 2 : 0);
@@ -120,12 +139,14 @@ export default function OnboardingWizard() {
       setRetellAgentId(practice.settings.retell?.agent_id || '');
       setRetellPhone(practice.settings.retell?.phone_number || '');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [practice]);
 
   useEffect(() => {
     if (step === 3 && user?.practice_id) {
-      api.get('/providers')
-        .then(r => setProviders(r.data || []))
+      api
+        .get('/providers')
+        .then((r) => setProviders(r.data || []))
         .catch(() => {});
     }
   }, [step, user]);
@@ -139,9 +160,9 @@ export default function OnboardingWizard() {
     try {
       const data = await onboardPractice(signup);
       setRetellPayload(data.next_steps);
-      setBranding(b => ({
+      setBranding((b) => ({
         ...b,
-        greeting: `Thank you for calling ${signup.practice_name}! This is ${b.agent_name}. How can I help today?`
+        greeting: `Thank you for calling ${signup.practice_name}! This is ${b.agent_name}. How can I help today?`,
       }));
       toast.success('Practice created!');
       setStep(2);
@@ -206,7 +227,7 @@ export default function OnboardingWizard() {
     try {
       const r = await post(`/practice/${user.practice_id}/appointment-types`, {
         ...newType,
-        id
+        id,
       });
       setApptTypes(r.data);
       setNewType({ id: '', name: '', duration_min: 30 });
@@ -219,7 +240,9 @@ export default function OnboardingWizard() {
 
   const removeType = async (id) => {
     try {
-      const r = await del(`/practice/${user.practice_id}/appointment-types/${id}`);
+      const r = await del(
+        `/practice/${user.practice_id}/appointment-types/${id}`,
+      );
       setApptTypes(r.data);
     } catch {
       toast.error('Failed');
@@ -255,9 +278,9 @@ export default function OnboardingWizard() {
   const loadRetellPrompt = async () => {
     try {
       const r = await api.get(`/agent/${user.practice_id}/prompt`);
-      setRetellPayload(prev => ({
+      setRetellPayload((prev) => ({
         ...(prev || {}),
-        rendered_prompt: r.data.prompt
+        rendered_prompt: r.data.prompt,
       }));
     } catch {
       toast.error('Failed to load prompt');
@@ -271,8 +294,8 @@ export default function OnboardingWizard() {
         retell: {
           agent_id: retellAgentId || null,
           phone_number: retellPhone || null,
-          provisioned_at: new Date().toISOString()
-        }
+          provisioned_at: new Date().toISOString(),
+        },
       });
       toast.success('Retell config saved');
       setStep(8);
@@ -300,13 +323,13 @@ export default function OnboardingWizard() {
   const API_BASE_URL = 'https://api.frontdeskdentalai.com';
 
   const urls = retellPayload?.function_urls || {
-    lookup_patient:              `${API_BASE_URL}/api/retell/lookup-patient`,
-    list_providers:              `${API_BASE_URL}/api/retell/list-providers`,
+    lookup_patient: `${API_BASE_URL}/api/retell/lookup-patient`,
+    list_providers: `${API_BASE_URL}/api/retell/list-providers`,
     check_provider_availability: `${API_BASE_URL}/api/retell/check-provider-availability`,
-    book_appointments:           `${API_BASE_URL}/api/retell/book-appointment`,
-    get_patient_appointments:    `${API_BASE_URL}/api/retell/get-patient-appointments`,
-    cancel_appointment:          `${API_BASE_URL}/api/retell/cancel-appointment`,
-    register_patient:            `${API_BASE_URL}/api/retell/register-patient`,
+    book_appointments: `${API_BASE_URL}/api/retell/book-appointment`,
+    get_patient_appointments: `${API_BASE_URL}/api/retell/get-patient-appointments`,
+    cancel_appointment: `${API_BASE_URL}/api/retell/cancel-appointment`,
+    register_patient: `${API_BASE_URL}/api/retell/register-patient`,
   };
 
   const webhookUrl =
@@ -314,21 +337,40 @@ export default function OnboardingWizard() {
     `${API_BASE_URL}/api/webhooks/retell/${user?.practice_id}`;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50/30 py-8" data-testid="onboarding-wizard">
+    <div
+      className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50/30 py-8"
+      data-testid="onboarding-wizard"
+    >
       <div className="max-w-4xl mx-auto px-4">
-
         <div className="mb-8">
           <div className="flex items-center justify-between mb-2">
-            <h1 className="text-2xl font-bold text-slate-900">Welcome to DentalAI</h1>
-            <span className="text-sm text-slate-500">Step {step + 1} of {STEPS.length}</span>
+            <h1 className="text-2xl font-bold text-slate-900">
+              Welcome to DentalAI
+            </h1>
+            <span className="text-sm text-slate-500">
+              Step {step + 1} of {STEPS.length}
+            </span>
           </div>
           <div className="w-full bg-slate-200 rounded-full h-1.5">
-            <div className="bg-teal-600 h-1.5 rounded-full transition-all" style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} />
+            <div
+              className="bg-teal-600 h-1.5 rounded-full transition-all"
+              style={{
+                width: `${((step + 1) / STEPS.length) * 100}%`,
+              }}
+            />
           </div>
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
             {STEPS.map((s, i) => (
-              <span key={s.id}
-                className={`px-2 py-1 rounded-full ${i === step ? 'bg-teal-600 text-white' : i < step ? 'bg-teal-100 text-teal-700' : 'bg-slate-100 text-slate-500'}`}>
+              <span
+                key={s.id}
+                className={`px-2 py-1 rounded-full ${
+                  i === step
+                    ? 'bg-teal-600 text-white'
+                    : i < step
+                    ? 'bg-teal-100 text-teal-700'
+                    : 'bg-slate-100 text-slate-500'
+                }`}
+              >
                 {s.name}
               </span>
             ))}
@@ -340,18 +382,24 @@ export default function OnboardingWizard() {
             <CardTitle>{STEPS[step].name}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-
             {step === 0 && (
               <div className="space-y-4" data-testid="step-welcome">
-                <p className="text-slate-700">Let's get your clinic set up with an AI receptionist. It takes about 20 minutes and includes:</p>
+                <p className="text-slate-700">
+                  Let's get your clinic set up with an AI receptionist. It takes
+                  about 20 minutes and includes:
+                </p>
                 <ul className="space-y-1.5 text-sm text-slate-600 list-disc pl-5">
                   <li>Creating your account & practice</li>
                   <li>Setting hours, providers, appointment types</li>
-                  <li>Customizing your AI's greeting and emergency rules</li>
+                  <li>Customizing your AI&apos;s greeting and emergency rules</li>
                   <li>Connecting your Retell phone number</li>
                 </ul>
-                <Button data-testid="wizard-start-btn" onClick={() => setStep(1)} className="bg-teal-600 hover:bg-teal-700">
-                  Let's go <ChevronRight className="w-4 h-4 ml-1" />
+                <Button
+                  data-testid="wizard-start-btn"
+                  onClick={() => setStep(1)}
+                  className="bg-teal-600 hover:bg-teal-700"
+                >
+                  Let&apos;s go <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               </div>
             )}
@@ -359,32 +407,116 @@ export default function OnboardingWizard() {
             {step === 1 && (
               <div className="space-y-4" data-testid="step-signup">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div><Label>Practice name *</Label><Input data-testid="signup-practice-name" value={signup.practice_name} onChange={e => setSignup({ ...signup, practice_name: e.target.value })} /></div>
-                  <div><Label>Timezone</Label>
-                    <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                      value={signup.timezone} onChange={e => setSignup({ ...signup, timezone: e.target.value })}>
+                  <div>
+                    <Label>Practice name *</Label>
+                    <Input
+                      data-testid="signup-practice-name"
+                      value={signup.practice_name}
+                      onChange={(e) =>
+                        setSignup({
+                          ...signup,
+                          practice_name: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Timezone</Label>
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      value={signup.timezone}
+                      onChange={(e) =>
+                        setSignup({ ...signup, timezone: e.target.value })
+                      }
+                    >
                       <option value="America/Toronto">Eastern (Toronto)</option>
                       <option value="America/Halifax">Atlantic (Halifax)</option>
                       <option value="America/Winnipeg">Central (Winnipeg)</option>
                       <option value="America/Edmonton">Mountain (Edmonton)</option>
-                      <option value="America/Vancouver">Pacific (Vancouver)</option>
+                      <option value="America/Vancouver">
+                        Pacific (Vancouver)
+                      </option>
                       <option value="America/New_York">US Eastern</option>
                       <option value="America/Chicago">US Central</option>
                       <option value="America/Denver">US Mountain</option>
                       <option value="America/Los_Angeles">US Pacific</option>
                     </select>
                   </div>
-                  <div><Label>Contact phone</Label><Input data-testid="signup-contact-phone" value={signup.contact_phone} onChange={e => setSignup({ ...signup, contact_phone: e.target.value })} /></div>
-                  <div><Label>Your full name *</Label><Input data-testid="signup-admin-name" value={signup.admin_full_name} onChange={e => setSignup({ ...signup, admin_full_name: e.target.value })} /></div>
-                  <div><Label>Admin email *</Label><Input data-testid="signup-admin-email" type="email" value={signup.admin_email} onChange={e => setSignup({ ...signup, admin_email: e.target.value })} /></div>
-                  <div><Label>Password *</Label><Input data-testid="signup-admin-password" type="password" value={signup.admin_password} onChange={e => setSignup({ ...signup, admin_password: e.target.value })} /></div>
+                  <div>
+                    <Label>Contact phone</Label>
+                    <Input
+                      data-testid="signup-contact-phone"
+                      value={signup.contact_phone}
+                      onChange={(e) =>
+                        setSignup({
+                          ...signup,
+                          contact_phone: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Your full name *</Label>
+                    <Input
+                      data-testid="signup-admin-name"
+                      value={signup.admin_full_name}
+                      onChange={(e) =>
+                        setSignup({
+                          ...signup,
+                          admin_full_name: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Admin email *</Label>
+                    <Input
+                      data-testid="signup-admin-email"
+                      type="email"
+                      value={signup.admin_email}
+                      onChange={(e) =>
+                        setSignup({
+                          ...signup,
+                          admin_email: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Password *</Label>
+                    <Input
+                      data-testid="signup-admin-password"
+                      type="password"
+                      value={signup.admin_password}
+                      onChange={(e) =>
+                        setSignup({
+                          ...signup,
+                          admin_password: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
                 </div>
                 <div className="flex justify-between">
-                  <Button variant="outline" onClick={() => setStep(0)}><ChevronLeft className="w-4 h-4 mr-1" /> Back</Button>
-                  <Button data-testid="wizard-signup-btn" onClick={handleSignup}
-                    disabled={saving || !signup.practice_name || !signup.admin_email || !signup.admin_password || !signup.admin_full_name}
-                    className="bg-teal-600 hover:bg-teal-700">
-                    {saving && <Loader2 className="w-4 h-4 mr-1 animate-spin" />} Create practice <ChevronRight className="w-4 h-4 ml-1" />
+                  <Button variant="outline" onClick={() => setStep(0)}>
+                    <ChevronLeft className="w-4 h-4 mr-1" /> Back
+                  </Button>
+                  <Button
+                    data-testid="wizard-signup-btn"
+                    onClick={handleSignup}
+                    disabled={
+                      saving ||
+                      !signup.practice_name ||
+                      !signup.admin_email ||
+                      !signup.admin_password ||
+                      !signup.admin_full_name
+                    }
+                    className="bg-teal-600 hover:bg-teal-700"
+                  >
+                    {saving && (
+                      <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                    )}
+                    Create practice <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
                 </div>
               </div>
@@ -392,15 +524,96 @@ export default function OnboardingWizard() {
 
             {step === 2 && (
               <div className="space-y-3" data-testid="step-hours">
-                <p className="text-sm text-slate-600">Set weekly opening hours. Leave a day blank to mark it closed.</p>
-                {DAY_KEYS.map(k => {
+                <p className="text-sm text-slate-600">
+                  Set weekly opening hours. Leave a day blank to mark it closed.
+                </p>
+                {DAY_KEYS.map((k) => {
                   const slot = hours.weekly[k];
                   return (
                     <div key={k} className="flex items-center gap-3">
-                      <div className="w-12 font-medium text-slate-700">{DAY_LABELS[k]}</div>
-                      <input type="checkbox" checked={!!slot}
+                      <div className="w-12 font-medium text-slate-700">
+                        {DAY_LABELS[k]}
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={!!slot}
                         data-testid={`hours-${k}-open-toggle`}
-                        onChange={e => setHours(h => ({ ...h, weekly: { ...h.weekly, [k]: e.target.checked ? { open: '08:00', close: '17:00' } : null } }))} />
-                      <Input type="time" value={slot?.open || ''} disabled={!slot}
+                        onChange={(e) =>
+                          setHours((h) => ({
+                            ...h,
+                            weekly: {
+                              ...h.weekly,
+                              [k]: e.target.checked
+                                ? { open: '08:00', close: '17:00' }
+                                : null,
+                            },
+                          }))
+                        }
+                      />
+                      <Input
+                        type="time"
+                        value={slot?.open || ''}
+                        disabled={!slot}
                         data-testid={`hours-${k}-open`}
-                        onChange={e => setHours(h => ({ ...h, weekly: { ...h.weekly, [k]: { ...h.week
+                        onChange={(e) =>
+                          setHours((h) => ({
+                            ...h,
+                            weekly: {
+                              ...h.weekly,
+                              [k]: {
+                                ...(h.weekly[k] || {}),
+                                open: e.target.value,
+                              },
+                            },
+                          }))
+                        }
+                      />
+                      <Input
+                        type="time"
+                        value={slot?.close || ''}
+                        disabled={!slot}
+                        data-testid={`hours-${k}-close`}
+                        onChange={(e) =>
+                          setHours((h) => ({
+                            ...h,
+                            weekly: {
+                              ...h.weekly,
+                              [k]: {
+                                ...(h.weekly[k] || {}),
+                                close: e.target.value,
+                              },
+                            },
+                          }))
+                        }
+                      />
+                    </div>
+                  );
+                })}
+                <div className="mt-4 flex justify-between">
+                  <Button variant="outline" onClick={() => setStep(1)}>
+                    <ChevronLeft className="w-4 h-4 mr-1" /> Back
+                  </Button>
+                  <Button
+                    data-testid="wizard-hours-save-btn"
+                    onClick={handleSaveHours}
+                    disabled={saving}
+                    className="bg-teal-600 hover:bg-teal-700"
+                  >
+                    {saving && (
+                      <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                    )}
+                    Save hours <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* TODO: Re-add UI for steps 3–8 if needed, using your original layout.
+                Logic functions (providers, apptTypes, branding, emergency, retell, finish)
+                are already wired above and ready to be hooked into JSX again. */}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
