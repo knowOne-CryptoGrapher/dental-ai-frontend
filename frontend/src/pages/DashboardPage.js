@@ -8,10 +8,15 @@ import {
   Calendar, Users, Phone, Clock, AlertTriangle,
   CheckCircle2, ArrowRight, TrendingUp, PhoneIncoming
 } from 'lucide-react';
-import { mockStats, mockAppointments, mockCallLogs, mockNotifications } from '../data/mockData';
+import { api } from '../config/api';
+import {
+  mockStats,
+  mockAppointments,
+  mockCallLogs,
+  mockNotifications
+} from '../data/mockData';
 
 export default function DashboardPage({ useMock = false }) {
-  const { axiosAuth } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState(mockStats);
   const [recentAppointments, setRecentAppointments] = useState([]);
@@ -30,28 +35,27 @@ export default function DashboardPage({ useMock = false }) {
         setLoading(false);
         return;
       }
+
       try {
-        const api = axiosAuth();
         const [statsRes, aptsRes, callsRes, notifsRes] = await Promise.all([
           api.get('/stats'),
           api.get('/appointments'),
           api.get('/call-logs'),
           api.get('/notifications')
         ]);
+
         setStats(statsRes.data);
         setRecentAppointments(aptsRes.data.slice(0, 4));
-        
-        // Separate active calls from recent calls
+
         const allCalls = callsRes.data || [];
         const active = allCalls.filter(c => c.call_status === 'started' && !c.end_timestamp);
         const completed = allCalls.filter(c => c.call_status !== 'started' || c.end_timestamp);
-        
+
         setActiveCalls(active);
         setRecentCalls(completed.slice(0, 3));
         setPendingNotifications(notifsRes.data.filter(n => n.status === 'unread'));
       } catch (err) {
         console.error('Failed to fetch dashboard data:', err);
-        // Fall back to mock on error
         setStats(mockStats);
         setRecentAppointments(mockAppointments.slice(0, 4));
         setRecentCalls(mockCallLogs.slice(0, 3));
@@ -61,26 +65,65 @@ export default function DashboardPage({ useMock = false }) {
         setLoading(false);
       }
     };
-    
-    // Initial fetch
+
     fetchData();
-    
-    // Poll for updates every 8 seconds to refresh active calls
-    const pollInterval = setInterval(() => {
-      fetchData();
-    }, 8000);
-    
-    // Cleanup interval on unmount
+    const pollInterval = setInterval(fetchData, 8000);
     return () => clearInterval(pollInterval);
-  }, [axiosAuth, useMock]);
+  }, [useMock]);
 
   const statCards = [
-    { label: "Today's Appointments", value: stats.today_appointments, icon: Calendar, color: 'bg-blue-50 text-blue-600', iconBg: 'bg-blue-100', path: '/appointments' },
-    { label: 'Total Patients', value: stats.total_patients, icon: Users, color: 'bg-emerald-50 text-emerald-600', iconBg: 'bg-emerald-100', path: '/patients' },
-    { label: 'Total Calls', value: stats.total_calls, icon: Phone, color: 'bg-violet-50 text-violet-600', iconBg: 'bg-violet-100', path: '/call-logs' },
-    { label: 'Scheduled', value: stats.scheduled_appointments, icon: CheckCircle2, color: 'bg-amber-50 text-amber-600', iconBg: 'bg-amber-100', path: '/appointments' },
-    ...(stats.providers !== undefined ? [{ label: 'Providers', value: stats.providers, icon: Users, color: 'bg-cyan-50 text-cyan-600', iconBg: 'bg-cyan-100', path: '/manage' }] : []),
-    ...(stats.pending_claims !== undefined && stats.pending_claims > 0 ? [{ label: 'Pending Claims', value: stats.pending_claims, icon: CheckCircle2, color: 'bg-red-50 text-red-600', iconBg: 'bg-red-100', path: '/insurance' }] : []),
+    {
+      label: "Today's Appointments",
+      value: stats.today_appointments,
+      icon: Calendar,
+      color: 'bg-blue-50 text-blue-600',
+      iconBg: 'bg-blue-100',
+      path: '/appointments'
+    },
+    {
+      label: 'Total Patients',
+      value: stats.total_patients,
+      icon: Users,
+      color: 'bg-emerald-50 text-emerald-600',
+      iconBg: 'bg-emerald-100',
+      path: '/patients'
+    },
+    {
+      label: 'Total Calls',
+      value: stats.total_calls,
+      icon: Phone,
+      color: 'bg-violet-50 text-violet-600',
+      iconBg: 'bg-violet-100',
+      path: '/call-logs'
+    },
+    {
+      label: 'Scheduled',
+      value: stats.scheduled_appointments,
+      icon: CheckCircle2,
+      color: 'bg-amber-50 text-amber-600',
+      iconBg: 'bg-amber-100',
+      path: '/appointments'
+    },
+    ...(stats.providers !== undefined
+      ? [{
+          label: 'Providers',
+          value: stats.providers,
+          icon: Users,
+          color: 'bg-cyan-50 text-cyan-600',
+          iconBg: 'bg-cyan-100',
+          path: '/manage'
+        }]
+      : []),
+    ...(stats.pending_claims !== undefined && stats.pending_claims > 0
+      ? [{
+          label: 'Pending Claims',
+          value: stats.pending_claims,
+          icon: CheckCircle2,
+          color: 'bg-red-50 text-red-600',
+          iconBg: 'bg-red-100',
+          path: '/insurance'
+        }]
+      : []),
   ];
 
   const getStatusBadge = (status) => {
@@ -114,7 +157,6 @@ export default function DashboardPage({ useMock = false }) {
         <p className="text-sm text-gray-500 mt-1">Overview of your dental practice</p>
       </div>
 
-      {/* Pending Alerts */}
       {pendingNotifications.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-2">
@@ -135,13 +177,12 @@ export default function DashboardPage({ useMock = false }) {
         </div>
       )}
 
-      {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((stat) => {
           const Icon = stat.icon;
           return (
-            <Card 
-              key={stat.label} 
+            <Card
+              key={stat.label}
               className="border-gray-200/80 hover:shadow-md hover:border-teal-300 transition-all cursor-pointer"
               onClick={() => navigate(stat.path)}
             >
@@ -161,7 +202,6 @@ export default function DashboardPage({ useMock = false }) {
         })}
       </div>
 
-      {/* Live Calls Section - Show if any active */}
       {activeCalls.length > 0 && (
         <Card className="border-green-200/80 bg-gradient-to-br from-green-50/50 to-white">
           <CardHeader className="border-b border-green-100 pb-3">
@@ -183,7 +223,10 @@ export default function DashboardPage({ useMock = false }) {
           <CardContent className="p-4">
             <div className="space-y-2">
               {activeCalls.map((call) => (
-                <div key={call.id || call.call_id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-green-200 hover:border-green-300 transition-colors">
+                <div
+                  key={call.id || call.call_id}
+                  className="flex items-center justify-between p-3 bg-white rounded-lg border border-green-200 hover:border-green-300 transition-colors"
+                >
                   <div className="flex items-center gap-3">
                     <div className="relative">
                       <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
@@ -198,7 +241,10 @@ export default function DashboardPage({ useMock = false }) {
                       </p>
                       <p className="text-xs text-gray-500 flex items-center gap-1">
                         <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                        Started {new Date(call.created_at || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
+                        Started {new Date(call.created_at || Date.now()).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
                       </p>
                     </div>
                   </div>
@@ -215,33 +261,48 @@ export default function DashboardPage({ useMock = false }) {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Appointments */}
         <Card className="border-gray-200/80">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">Upcoming Appointments</CardTitle>
-              <Button variant="ghost" size="sm" onClick={() => navigate('/appointments')} className="text-teal-600 hover:text-teal-700">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate('/appointments')}
+                className="text-teal-600 hover:text-teal-700"
+              >
                 View All <ArrowRight className="w-4 h-4 ml-1" />
               </Button>
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
             {recentAppointments.map((apt) => (
-              <div key={apt.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50/80 hover:bg-gray-100/80 transition-colors">
+              <div
+                key={apt.id}
+                className="flex items-center justify-between p-3 rounded-lg bg-gray-50/80 hover:bg-gray-100/80 transition-colors"
+              >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-9 h-9 rounded-full bg-teal-100 flex items-center justify-center shrink-0">
-                    <span className="text-xs font-semibold text-teal-700">{apt.patient_name?.charAt(0)}</span>
+                    <span className="text-xs font-semibold text-teal-700">
+                      {apt.patient_name?.charAt(0)}
+                    </span>
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">{apt.patient_name}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <Clock className="w-3 h-3 text-gray-400" />
-                      <span className="text-xs text-gray-500">{apt.appointment_date} at {apt.appointment_time}</span>
+                      <span className="text-xs text-gray-500">
+                        {apt.appointment_date} at {apt.appointment_time}
+                      </span>
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  {apt.is_emergency && <Badge variant="destructive" className="text-[10px]">URGENT</Badge>}
+                  {apt.is_emergency && (
+                    <Badge variant="destructive" className="text-[10px]">
+                      URGENT
+                    </Badge>
+                  )}
                   <div className={`text-[10px] px-2 py-1 rounded-md border ${getStatusBadge(apt.status)}`}>
                     {apt.status === 'pending_verification' ? 'Pending' : apt.status}
                   </div>
@@ -254,25 +315,36 @@ export default function DashboardPage({ useMock = false }) {
           </CardContent>
         </Card>
 
-        {/* Recent Calls */}
         <Card className="border-gray-200/80">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">Recent AI Calls</CardTitle>
-              <Button variant="ghost" size="sm" onClick={() => navigate('/call-logs')} className="text-teal-600 hover:text-teal-700">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate('/call-logs')}
+                className="text-teal-600 hover:text-teal-700"
+              >
                 View All <ArrowRight className="w-4 h-4 ml-1" />
               </Button>
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
             {recentCalls.map((call) => (
-              <div key={call.id} className="p-3 rounded-lg bg-gray-50/80 hover:bg-gray-100/80 transition-colors">
+              <div
+                key={call.id}
+                className="p-3 rounded-lg bg-gray-50/80 hover:bg-gray-100/80 transition-colors"
+              >
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-2">
                     <PhoneIncoming className="w-4 h-4 text-teal-500" />
-                    <span className="text-sm font-medium text-gray-900">{call.patient_name || 'Unknown Caller'}</span>
+                    <span className="text-sm font-medium text-gray-900">
+                      {call.patient_name || 'Unknown Caller'}
+                    </span>
                   </div>
-                  <span className="text-xs text-gray-400">{call.duration_seconds ? formatDuration(call.duration_seconds) : '--:--'}</span>
+                  <span className="text-xs text-gray-400">
+                    {call.duration_seconds ? formatDuration(call.duration_seconds) : '--:--'}
+                  </span>
                 </div>
                 <p className="text-xs text-gray-500 line-clamp-1">
                   {call.call_summary?.reason || call.action_taken || 'General inquiry'}

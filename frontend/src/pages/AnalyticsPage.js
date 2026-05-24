@@ -1,31 +1,43 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { api } from '../config/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import {
   Phone, PhoneIncoming, PhoneMissed, Calendar, UserPlus,
-  ShieldCheck, AlertTriangle, TrendingUp, BarChart3
+  ShieldCheck, AlertTriangle, TrendingUp
 } from 'lucide-react';
 import { mockAnalytics } from '../data/mockData';
 
 export default function AnalyticsPage({ useMock = false }) {
-  const { axiosAuth } = useAuth();
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchAnalytics = async () => {
-      if (useMock) { setAnalytics(mockAnalytics); setLoading(false); return; }
+      if (useMock) {
+        setAnalytics(mockAnalytics);
+        setLoading(false);
+        return;
+      }
+
       try {
-        const api = axiosAuth();
         const res = await api.get('/analytics/dashboard');
         setAnalytics(res.data);
-      } catch { setAnalytics(mockAnalytics); } finally { setLoading(false); }
+      } catch {
+        setAnalytics(mockAnalytics);
+      } finally {
+        setLoading(false);
+      }
     };
+
     fetchAnalytics();
-  }, [axiosAuth, useMock]);
+  }, [useMock]);
 
   if (loading || !analytics) {
-    return <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" /></div>;
+    return (
+      <div className="flex justify-center py-12">
+        <div className="w-6 h-6 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
   const { metrics } = analytics;
@@ -186,3 +198,4 @@ export default function AnalyticsPage({ useMock = false }) {
     </div>
   );
 }
+
