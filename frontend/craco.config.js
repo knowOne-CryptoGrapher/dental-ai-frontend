@@ -28,7 +28,7 @@ let webpackConfig = {
   webpack: {
     alias: {
       // ⭐ FIXED: Alias now points to the REAL src folder
-      '@': path.resolve(__dirname, 'frontend/src'),
+      '@': path.resolve(__dirname, 'src'),
     },
     configure: (webpackConfig) => {
       // Reduce watched directories
