@@ -12,11 +12,13 @@ import {
   ClipboardList,
   Sparkles,
 } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
+
 import { useAuth } from '@/hooks/useAuth';
 import api from '@/lib/api';
 
@@ -45,11 +47,11 @@ const DAY_LABELS = {
 
 function CopyButton({ text, label = 'Copy' }) {
   const [copied, setCopied] = useState(false);
+
   return (
     <Button
       variant="outline"
       size="sm"
-      data-testid="copy-btn"
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(text);
@@ -60,11 +62,7 @@ function CopyButton({ text, label = 'Copy' }) {
         }
       }}
     >
-      {copied ? (
-        <Check className="w-4 h-4 mr-1" />
-      ) : (
-        <Copy className="w-4 h-4 mr-1" />
-      )}
+      {copied ? <Check className="w-4 h-4 mr-1" /> : <Copy className="w-4 h-4 mr-1" />}
       {copied ? 'Copied!' : label}
     </Button>
   );
@@ -139,124 +137,101 @@ export default function OnboardingWizard() {
       setRetellAgentId(practice.settings.retell?.agent_id || '');
       setRetellPhone(practice.settings.retell?.phone_number || '');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [practice]);
 
-  useEffect(() => {
-    if (step === 3 && user?.practice_id) {
-      api
-        .get('/providers')
-        .then((r) => setProviders(r.data || []))
-        .catch(() => {});
-    }
-  }, [step, user]);
-
-  const put = async (path, body) => api.put(path, body);
-  const post = async (path, body) => api.post(path, body);
-  const del = async (path) => api.delete(path);
+  const next = () => setStep((s) => Math.min(s + 1, STEPS.length - 1));
+  const back = () => setStep((s) => Math.max(s - 1, 0));
 
   const handleSignup = async () => {
     setSaving(true);
     try {
-      const data = await onboardPractice(signup);
-      setRetellPayload(data.next_steps);
-      setBranding((b) => ({
-        ...b,
-        greeting: `Thank you for calling ${signup.practice_name}! This is ${b.agent_name}. How can I help today?`,
-      }));
+      await onboardPractice(signup);
       toast.success('Practice created!');
-      setStep(2);
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Signup failed');
+      next();
+    } catch (err) {
+      toast.error(err.message || 'Signup failed');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleSaveHours = async () => {
+  const saveHours = async () => {
     setSaving(true);
     try {
-      await put(`/practice/${user.practice_id}/hours`, hours);
+      await api.put('/practice/settings/hours', hours);
       toast.success('Hours saved');
-      setStep(3);
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
+      next();
+    } catch (err) {
+      toast.error('Failed to save hours');
     } finally {
       setSaving(false);
     }
   };
 
   const addProvider = async () => {
-    if (!newProvider.name.trim()) return toast.error('Enter a name');
+    if (!newProvider.name) return;
     setSaving(true);
     try {
-      await post('/providers', {
-        name: newProvider.name.trim(),
-        role: newProvider.role,
-        appointment_types: [],
-        working_hours: {},
-        on_call: false,
-        specialties: [],
-        license_number: '',
-      });
-      const r = await api.get('/providers');
-      setProviders(r.data || []);
+      const res = await api.post('/practice/providers', newProvider);
+      setProviders([...providers, res.data]);
       setNewProvider({ name: '', role: 'Dentist' });
       toast.success('Provider added');
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
+    } catch {
+      toast.error('Failed to add provider');
     } finally {
       setSaving(false);
     }
   };
 
   const removeProvider = async (id) => {
-    try {
-      await del(`/providers/${id}`);
-      const r = await api.get('/providers');
-      setProviders(r.data || []);
-    } catch {
-      toast.error('Failed');
-    }
-  };
-
-  const addType = async () => {
-    if (!newType.name.trim()) return toast.error('Enter a name');
-    const id = (newType.id || newType.name).toLowerCase().replace(/\s+/g, '-');
     setSaving(true);
     try {
-      const r = await post(`/practice/${user.practice_id}/appointment-types`, {
-        ...newType,
-        id,
-      });
-      setApptTypes(r.data);
-      setNewType({ id: '', name: '', duration_min: 30 });
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
+      await api.delete(`/practice/providers/${id}`);
+      setProviders(providers.filter((p) => p.id !== id));
+      toast.success('Provider removed');
+    } catch {
+      toast.error('Failed to remove provider');
     } finally {
       setSaving(false);
     }
   };
 
-  const removeType = async (id) => {
+  const addApptType = async () => {
+    if (!newType.name) return;
+    setSaving(true);
     try {
-      const r = await del(
-        `/practice/${user.practice_id}/appointment-types/${id}`,
-      );
-      setApptTypes(r.data);
+      const res = await api.post('/practice/appointment-types', newType);
+      setApptTypes([...apptTypes, res.data]);
+      setNewType({ id: '', name: '', duration_min: 30 });
+      toast.success('Appointment type added');
     } catch {
-      toast.error('Failed');
+      toast.error('Failed to add appointment type');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeApptType = async (id) => {
+    setSaving(true);
+    try {
+      await api.delete(`/practice/appointment-types/${id}`);
+      setApptTypes(apptTypes.filter((t) => t.id !== id));
+      toast.success('Appointment type removed');
+    } catch {
+      toast.error('Failed to remove appointment type');
+    } finally {
+      setSaving(false);
     }
   };
 
   const saveBranding = async () => {
     setSaving(true);
     try {
-      await put(`/practice/${user.practice_id}/branding`, branding);
+      await api.put('/practice/settings/branding', branding);
       toast.success('Branding saved');
-      setStep(6);
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
+      next();
+    } catch {
+      toast.error('Failed to save branding');
     } finally {
       setSaving(false);
     }
@@ -265,11 +240,11 @@ export default function OnboardingWizard() {
   const saveEmergency = async () => {
     setSaving(true);
     try {
-      await put(`/practice/${user.practice_id}/emergency-rules`, emergency);
+      await api.put('/practice/settings/emergency', emergency);
       toast.success('Emergency rules saved');
-      setStep(isSuperAdmin ? 7 : 8);
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
+      next();
+    } catch {
+      toast.error('Failed to save emergency rules');
     } finally {
       setSaving(false);
     }
@@ -277,343 +252,564 @@ export default function OnboardingWizard() {
 
   const loadRetellPrompt = async () => {
     try {
-      const r = await api.get(`/agent/${user.practice_id}/prompt`);
-      setRetellPayload((prev) => ({
-        ...(prev || {}),
-        rendered_prompt: r.data.prompt,
-      }));
+      const res = await api.get('/practice/settings/retell/prompt');
+      setRetellPayload(res.data);
     } catch {
-      toast.error('Failed to load prompt');
+      toast.error('Failed to load Retell prompt');
     }
   };
 
-  const saveRetellConfig = async () => {
+  const saveRetell = async () => {
     setSaving(true);
     try {
-      await put(`/practice/${user.practice_id}/config`, {
-        retell: {
-          agent_id: retellAgentId || null,
-          phone_number: retellPhone || null,
-          provisioned_at: new Date().toISOString(),
-        },
+      await api.put('/practice/settings/retell', {
+        agent_id: retellAgentId,
+        phone_number: retellPhone,
       });
-      toast.success('Retell config saved');
-      setStep(8);
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
+      toast.success('Retell settings saved');
+      next();
+    } catch {
+      toast.error('Failed to save Retell settings');
     } finally {
       setSaving(false);
     }
   };
 
-  const finishOnboarding = async () => {
+  const finish = async () => {
     setSaving(true);
     try {
-      await completeOnboarding(user.practice_id);
-      await refreshPractice();
-      toast.success('Welcome aboard — your clinic is live!');
+      await completeOnboarding();
+      toast.success('Onboarding complete!');
       navigate('/dashboard');
     } catch {
-      toast.error('Could not finalize onboarding');
+      toast.error('Failed to finish onboarding');
     } finally {
       setSaving(false);
     }
   };
 
-  const API_BASE_URL = 'https://api.frontdeskdentalai.com';
-
-  const urls = retellPayload?.function_urls || {
-    lookup_patient: `${API_BASE_URL}/api/retell/lookup-patient`,
-    list_providers: `${API_BASE_URL}/api/retell/list-providers`,
-    check_provider_availability: `${API_BASE_URL}/api/retell/check-provider-availability`,
-    book_appointments: `${API_BASE_URL}/api/retell/book-appointment`,
-    get_patient_appointments: `${API_BASE_URL}/api/retell/get-patient-appointments`,
-    cancel_appointment: `${API_BASE_URL}/api/retell/cancel-appointment`,
-    register_patient: `${API_BASE_URL}/api/retell/register-patient`,
-  };
-
-  const webhookUrl =
-    retellPayload?.webhook_url ||
-    `${API_BASE_URL}/api/webhooks/retell/${user?.practice_id}`;
+  const StepWrapper = ({ children }) => (
+    <Card className="max-w-3xl mx-auto mt-10 shadow-lg">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          {React.createElement(STEPS[step].icon, { className: 'w-5 h-5 text-blue-600' })}
+          {STEPS[step].name}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
+  );
 
   return (
-    <div
-      className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50/30 py-8"
-      data-testid="onboarding-wizard"
-    >
-      <div className="max-w-4xl mx-auto px-4">
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-2">
-            <h1 className="text-2xl font-bold text-slate-900">
-              Welcome to DentalAI
-            </h1>
-            <span className="text-sm text-slate-500">
-              Step {step + 1} of {STEPS.length}
-            </span>
+    <div className="p-6">
+      {/* Step Navigation */}
+      <div className="flex justify-center gap-2 mb-6">
+        {STEPS.map((s) => (
+          <div
+            key={s.id}
+            className={`px-3 py-1 rounded-full text-sm ${
+              step === s.id ? 'bg-blue-600 text-white' : 'bg-gray-200'
+            }`}
+          >
+            {s.name}
           </div>
-          <div className="w-full bg-slate-200 rounded-full h-1.5">
-            <div
-              className="bg-teal-600 h-1.5 rounded-full transition-all"
-              style={{
-                width: `${((step + 1) / STEPS.length) * 100}%`,
-              }}
-            />
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2 text-xs">
-            {STEPS.map((s, i) => (
-              <span
-                key={s.id}
-                className={`px-2 py-1 rounded-full ${
-                  i === step
-                    ? 'bg-teal-600 text-white'
-                    : i < step
-                    ? 'bg-teal-100 text-teal-700'
-                    : 'bg-slate-100 text-slate-500'
-                }`}
-              >
-                {s.name}
-              </span>
-            ))}
-          </div>
-        </div>
+        ))}
+      </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{STEPS[step].name}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            {step === 0 && (
-              <div className="space-y-4" data-testid="step-welcome">
-                <p className="text-slate-700">
-                  Let's get your clinic set up with an AI receptionist. It takes
-                  about 20 minutes and includes:
-                </p>
-                <ul className="space-y-1.5 text-sm text-slate-600 list-disc pl-5">
-                  <li>Creating your account & practice</li>
-                  <li>Setting hours, providers, appointment types</li>
-                  <li>Customizing your AI&apos;s greeting and emergency rules</li>
-                  <li>Connecting your Retell phone number</li>
-                </ul>
-                <Button
-                  data-testid="wizard-start-btn"
-                  onClick={() => setStep(1)}
-                  className="bg-teal-600 hover:bg-teal-700"
-                >
-                  Let&apos;s go <ChevronRight className="w-4 h-4 ml-1" />
-                </Button>
-              </div>
-            )}
+      {/* Step 0 — Welcome */}
+      {step === 0 && (
+        <StepWrapper>
+          <p className="text-gray-700 mb-4">
+            Welcome to Dental AI! Let's get your practice set up.
+          </p>
+          <Button onClick={next}>Get Started</Button>
+        </StepWrapper>
+      )}
 
-            {step === 1 && (
-              <div className="space-y-4" data-testid="step-signup">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <Label>Practice name *</Label>
+      {/* Step 1 — Practice Basics */}
+      {step === 1 && (
+        <StepWrapper>
+          <div className="space-y-4">
+            <div>
+              <Label>Practice Name</Label>
+              <Input
+                value={signup.practice_name}
+                onChange={(e) =>
+                  setSignup({ ...signup, practice_name: e.target.value })
+                }
+              />
+            </div>
+
+            <div>
+              <Label>Admin Full Name</Label>
+              <Input
+                value={signup.admin_full_name}
+                onChange={(e) =>
+                  setSignup({ ...signup, admin_full_name: e.target.value })
+                }
+              />
+            </div>
+
+            <div>
+              <Label>Admin Email</Label>
+              <Input
+                type="email"
+                value={signup.admin_email}
+                onChange={(e) =>
+                  setSignup({ ...signup, admin_email: e.target.value })
+                }
+              />
+            </div>
+
+            <div>
+              <Label>Password</Label>
+              <Input
+                type="password"
+                value={signup.admin_password}
+                onChange={(e) =>
+                  setSignup({ ...signup, admin_password: e.target.value })
+                }
+              />
+            </div>
+
+            <div>
+              <Label>Contact Phone</Label>
+              <Input
+                value={signup.contact_phone}
+                onChange={(e) =>
+                  setSignup({ ...signup, contact_phone: e.target.value })
+                }
+              />
+            </div>
+
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={back}>
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                Back
+              </Button>
+              <Button onClick={handleSignup} disabled={saving}>
+                {saving ? <Loader2 className="animate-spin" /> : 'Save & Continue'}
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        </StepWrapper>
+      )}
+
+      {/* Step 2 — Hours */}
+      {step === 2 && (
+        <StepWrapper>
+          <div className="space-y-4">
+            {DAY_KEYS.map((day) => (
+              <div key={day} className="flex items-center gap-4">
+                <Label className="w-16">{DAY_LABELS[day]}</Label>
+
+                {hours.weekly[day] ? (
+                  <>
                     <Input
-                      data-testid="signup-practice-name"
-                      value={signup.practice_name}
+                      type="time"
+                      value={hours.weekly[day].open}
                       onChange={(e) =>
-                        setSignup({
-                          ...signup,
-                          practice_name: e.target.value,
+                        setHours({
+                          ...hours,
+                          weekly: {
+                            ...hours.weekly,
+                            [day]: {
+                              ...hours.weekly[day],
+                              open: e.target.value,
+                            },
+                          },
                         })
                       }
                     />
-                  </div>
-                  <div>
-                    <Label>Timezone</Label>
-                    <select
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                      value={signup.timezone}
+                    <Input
+                      type="time"
+                      value={hours.weekly[day].close}
                       onChange={(e) =>
-                        setSignup({ ...signup, timezone: e.target.value })
+                        setHours({
+                          ...hours,
+                          weekly: {
+                            ...hours.weekly,
+                            [day]: {
+                              ...hours.weekly[day],
+                              close: e.target.value,
+                            },
+                          },
+                        })
+                      }
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        setHours({
+                          ...hours,
+                          weekly: { ...hours.weekly, [day]: null },
+                        })
                       }
                     >
-                      <option value="America/Toronto">Eastern (Toronto)</option>
-                      <option value="America/Halifax">Atlantic (Halifax)</option>
-                      <option value="America/Winnipeg">Central (Winnipeg)</option>
-                      <option value="America/Edmonton">Mountain (Edmonton)</option>
-                      <option value="America/Vancouver">
-                        Pacific (Vancouver)
-                      </option>
-                      <option value="America/New_York">US Eastern</option>
-                      <option value="America/Chicago">US Central</option>
-                      <option value="America/Denver">US Mountain</option>
-                      <option value="America/Los_Angeles">US Pacific</option>
-                    </select>
-                  </div>
-                  <div>
-                    <Label>Contact phone</Label>
-                    <Input
-                      data-testid="signup-contact-phone"
-                      value={signup.contact_phone}
-                      onChange={(e) =>
-                        setSignup({
-                          ...signup,
-                          contact_phone: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label>Your full name *</Label>
-                    <Input
-                      data-testid="signup-admin-name"
-                      value={signup.admin_full_name}
-                      onChange={(e) =>
-                        setSignup({
-                          ...signup,
-                          admin_full_name: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label>Admin email *</Label>
-                    <Input
-                      data-testid="signup-admin-email"
-                      type="email"
-                      value={signup.admin_email}
-                      onChange={(e) =>
-                        setSignup({
-                          ...signup,
-                          admin_email: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label>Password *</Label>
-                    <Input
-                      data-testid="signup-admin-password"
-                      type="password"
-                      value={signup.admin_password}
-                      onChange={(e) =>
-                        setSignup({
-                          ...signup,
-                          admin_password: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-between">
-                  <Button variant="outline" onClick={() => setStep(0)}>
-                    <ChevronLeft className="w-4 h-4 mr-1" /> Back
-                  </Button>
+                      Closed
+                    </Button>
+                  </>
+                ) : (
                   <Button
-                    data-testid="wizard-signup-btn"
-                    onClick={handleSignup}
-                    disabled={
-                      saving ||
-                      !signup.practice_name ||
-                      !signup.admin_email ||
-                      !signup.admin_password ||
-                      !signup.admin_full_name
+                    onClick={() =>
+                      setHours({
+                        ...hours,
+                        weekly: {
+                          ...hours.weekly,
+                          [day]: { open: '09:00', close: '17:00' },
+                        },
+                      })
                     }
-                    className="bg-teal-600 hover:bg-teal-700"
                   >
-                    {saving && (
-                      <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                    )}
-                    Create practice <ChevronRight className="w-4 h-4 ml-1" />
+                    Set Hours
                   </Button>
-                </div>
+                )}
               </div>
-            )}
+            ))}
 
-            {step === 2 && (
-              <div className="space-y-3" data-testid="step-hours">
-                <p className="text-sm text-slate-600">
-                  Set weekly opening hours. Leave a day blank to mark it closed.
-                </p>
-                {DAY_KEYS.map((k) => {
-                  const slot = hours.weekly[k];
-                  return (
-                    <div key={k} className="flex items-center gap-3">
-                      <div className="w-12 font-medium text-slate-700">
-                        {DAY_LABELS[k]}
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={!!slot}
-                        data-testid={`hours-${k}-open-toggle`}
-                        onChange={(e) =>
-                          setHours((h) => ({
-                            ...h,
-                            weekly: {
-                              ...h.weekly,
-                              [k]: e.target.checked
-                                ? { open: '08:00', close: '17:00' }
-                                : null,
-                            },
-                          }))
-                        }
-                      />
-                      <Input
-                        type="time"
-                        value={slot?.open || ''}
-                        disabled={!slot}
-                        data-testid={`hours-${k}-open`}
-                        onChange={(e) =>
-                          setHours((h) => ({
-                            ...h,
-                            weekly: {
-                              ...h.weekly,
-                              [k]: {
-                                ...(h.weekly[k] || {}),
-                                open: e.target.value,
-                              },
-                            },
-                          }))
-                        }
-                      />
-                      <Input
-                        type="time"
-                        value={slot?.close || ''}
-                        disabled={!slot}
-                        data-testid={`hours-${k}-close`}
-                        onChange={(e) =>
-                          setHours((h) => ({
-                            ...h,
-                            weekly: {
-                              ...h.weekly,
-                              [k]: {
-                                ...(h.weekly[k] || {}),
-                                close: e.target.value,
-                              },
-                            },
-                          }))
-                        }
-                      />
-                    </div>
-                  );
-                })}
-                <div className="mt-4 flex justify-between">
-                  <Button variant="outline" onClick={() => setStep(1)}>
-                    <ChevronLeft className="w-4 h-4 mr-1" /> Back
-                  </Button>
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={back}>
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                Back
+              </Button>
+              <Button onClick={saveHours} disabled={saving}>
+                {saving ? <Loader2 className="animate-spin" /> : 'Save & Continue'}
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        </StepWrapper>
+      )}
+
+      {/* Step 3 — Providers */}
+      {step === 3 && (
+        <StepWrapper>
+          <div className="space-y-4">
+            <div className="flex gap-4">
+              <Input
+                placeholder="Provider Name"
+                value={newProvider.name}
+                onChange={(e) =>
+                  setNewProvider({ ...newProvider, name: e.target.value })
+                }
+              />
+              <Input
+                placeholder="Role"
+                value={newProvider.role}
+                onChange={(e) =>
+                  setNewProvider({ ...newProvider, role: e.target.value })
+                }
+              />
+              <Button onClick={addProvider} disabled={saving}>
+                Add
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              {providers.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex justify-between items-center p-2 border rounded"
+                >
+                  <span>
+                    {p.name} — {p.role}
+                  </span>
                   <Button
-                    data-testid="wizard-hours-save-btn"
-                    onClick={handleSaveHours}
-                    disabled={saving}
-                    className="bg-teal-600 hover:bg-teal-700"
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => removeProvider(p.id)}
                   >
-                    {saving && (
-                      <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                    )}
-                    Save hours <ChevronRight className="w-4 h-4 ml-1" />
+                    Remove
                   </Button>
                 </div>
+              ))}
+            </div>
+
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={back}>
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                Back
+              </Button>
+              <Button onClick={next}>
+                Continue
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        </StepWrapper>
+      )}
+
+      {/* Step 4 — Appointment Types */}
+      {step === 4 && (
+        <StepWrapper>
+          <div className="space-y-4">
+            <div className="flex gap-4">
+              <Input
+                placeholder="Type Name"
+                value={newType.name}
+                onChange={(e) =>
+                  setNewType({ ...newType, name: e.target.value })
+                }
+              />
+              <Input
+                type="number"
+                placeholder="Duration (min)"
+                value={newType.duration_min}
+                onChange={(e) =>
+                  setNewType({
+                    ...newType,
+                    duration_min: Number(e.target.value),
+                  })
+                }
+              />
+              <Button onClick={addApptType} disabled={saving}>
+                Add
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              {apptTypes.map((t) => (
+                <div
+                  key={t.id}
+                  className="flex justify-between items-center p-2 border rounded"
+                >
+                  <span>
+                    {t.name} — {t.duration_min} min
+                  </span>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => removeApptType(t.id)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={back}>
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                Back
+              </Button>
+              <Button onClick={next}>
+                Continue
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        </StepWrapper>
+      )}
+{/* Step 5 — Branding */}
+{step === 5 && (
+  <StepWrapper>
+    <div className="space-y-4">
+      <div>
+        <Label>AI Receptionist Name</Label>
+        <Input
+          value={branding.agent_name}
+          onChange={(e) =>
+            setBranding({ ...branding, agent_name: e.target.value })
+          }
+        />
+      </div>
+
+      <div>
+        <Label>Greeting</Label>
+        <Input
+          placeholder="Hi, thank you for calling..."
+          value={branding.greeting}
+          onChange={(e) =>
+            setBranding({ ...branding, greeting: e.target.value })
+          }
+        />
+      </div>
+
+      <div>
+        <Label>Closing Line</Label>
+        <Input
+          value={branding.closing}
+          onChange={(e) =>
+            setBranding({ ...branding, closing: e.target.value })
+          }
+        />
+      </div>
+
+      <div>
+        <Label>Voice Tone</Label>
+        <select
+          className="border rounded p-2 w-full"
+          value={branding.voice_tone}
+          onChange={(e) =>
+            setBranding({ ...branding, voice_tone: e.target.value })
+          }
+        >
+          <option value="warm_professional">Warm & Professional</option>
+          <option value="friendly">Friendly</option>
+          <option value="formal">Formal</option>
+          <option value="energetic">Energetic</option>
+        </select>
+      </div>
+
+      <div className="flex justify-between">
+        <Button variant="outline" onClick={back}>
+          <ChevronLeft className="w-4 h-4 mr-1" />
+          Back
+        </Button>
+        <Button onClick={saveBranding} disabled={saving}>
+          {saving ? <Loader2 className="animate-spin" /> : 'Save & Continue'}
+          <ChevronRight className="w-4 h-4 ml-1" />
+        </Button>
+      </div>
+    </div>
+  </StepWrapper>
+)}
+
+      {/* Step 6 — Emergency Rules */}
+      {step === 6 && (
+        <StepWrapper>
+          <div className="space-y-4">
+            <div>
+              <Label>Emergency Trigger Keywords</Label>
+              <Input
+                value={emergency.triggers.join(', ')}
+                onChange={(e) =>
+                  setEmergency({
+                    ...emergency,
+                    triggers: e.target.value.split(',').map((t) => t.trim()),
+                  })
+                }
+              />
+            </div>
+
+            <div>
+              <Label>Response Policy</Label>
+              <select
+                className="border rounded p-2 w-full"
+                value={emergency.response_policy}
+                onChange={(e) =>
+                  setEmergency({
+                    ...emergency,
+                    response_policy: e.target.value,
+                  })
+                }
+              >
+                <option value="earliest_available">Earliest Available</option>
+                <option value="same_day_if_possible">Same Day If Possible</option>
+                <option value="redirect_to_emergency_line">
+                  Redirect to Emergency Line
+                </option>
+              </select>
+            </div>
+
+            <div>
+              <Label>After-Hours Emergency Phone</Label>
+              <Input
+                value={emergency.after_hours_handoff_phone}
+                onChange={(e) =>
+                  setEmergency({
+                    ...emergency,
+                    after_hours_handoff_phone: e.target.value,
+                  })
+                }
+              />
+            </div>
+
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={back}>
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                Back
+              </Button>
+              <Button onClick={saveEmergency} disabled={saving}>
+                {saving ? <Loader2 className="animate-spin" /> : 'Save & Continue'}
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        </StepWrapper>
+      )}
+
+      {/* Step 7 — Retell Setup */}
+      {step === 7 && (
+        <StepWrapper>
+          <div className="space-y-4">
+            <p className="text-gray-700">
+              Connect your Retell voice agent. This enables phone call automation.
+            </p>
+
+            <div>
+              <Label>Retell Agent ID</Label>
+              <Input
+                value={retellAgentId}
+                onChange={(e) => setRetellAgentId(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <Label>Retell Phone Number</Label>
+              <Input
+                value={retellPhone}
+                onChange={(e) => setRetellPhone(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <Button variant="outline" onClick={loadRetellPrompt}>
+                Load Retell Prompt
+              </Button>
+            </div>
+
+            {retellPayload && (
+              <div className="p-3 border rounded bg-gray-50">
+                <pre className="text-xs whitespace-pre-wrap">
+                  {JSON.stringify(retellPayload, null, 2)}
+                </pre>
+                <CopyButton text={JSON.stringify(retellPayload, null, 2)} />
               </div>
             )}
 
-            {/* TODO: Re-add UI for steps 3–8 if needed, using your original layout.
-                Logic functions (providers, apptTypes, branding, emergency, retell, finish)
-                are already wired above and ready to be hooked into JSX again. */}
-          </CardContent>
-        </Card>
-      </div>
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={back}>
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                Back
+              </Button>
+              <Button onClick={saveRetell} disabled={saving}>
+                {saving ? <Loader2 className="animate-spin" /> : 'Save & Continue'}
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        </StepWrapper>
+      )}
+
+      {/* Step 8 — Test & Finish */}
+      {step === 8 && (
+        <StepWrapper>
+          <div className="space-y-4">
+            <p className="text-gray-700">
+              Your practice setup is complete! You can now test your AI receptionist
+              and begin using Dental AI.
+            </p>
+
+            <Button
+              className="w-full"
+              onClick={finish}
+              disabled={saving}
+            >
+              {saving ? <Loader2 className="animate-spin" /> : 'Finish & Go to Dashboard'}
+            </Button>
+
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => navigate('/dashboard')}
+            >
+              Skip for now
+            </Button>
+          </div>
+        </StepWrapper>
+      )}
     </div>
   );
 }
