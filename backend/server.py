@@ -73,9 +73,22 @@ app = FastAPI(
 # CORS Configuration
 # -------------------------------------------------------------------
 
+_DEFAULT_ORIGINS = [
+    "https://frontdeskdentalai.com",
+    "https://www.frontdeskdentalai.com",
+    "https://dental-ai-frontend.pages.dev",
+]
+
+_cors_env = os.getenv("CORS_ORIGINS", "")
+ALLOWED_ORIGINS = (
+    [o.strip() for o in _cors_env.split(",") if o.strip()]
+    if _cors_env
+    else _DEFAULT_ORIGINS
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Restrict later if needed
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
