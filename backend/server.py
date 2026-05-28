@@ -3,6 +3,7 @@ import json
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from motor.motor_asyncio import AsyncIOMotorClient
 
 # -------------------------------------------------------------------
 # Load Environment Variables (bulletproof)
@@ -39,6 +40,7 @@ from routers.retell_webhook_router import router as retell_webhook_router
 # -------------------------------------------------------------------
 
 from services.llm_manager import LLMManager
+from auth import set_db
 
 def load_json_file(path: str):
     if not path or not os.path.exists(path):
@@ -98,15 +100,30 @@ app.add_middleware(
 # Startup / Shutdown Events
 # -------------------------------------------------------------------
 
+_mongo_client: AsyncIOMotorClient | None = None
+
 @app.on_event("startup")
 async def startup_event():
+    global _mongo_client
     print("🚀 Server starting...")
+
+    mongo_uri = os.getenv("MONGODB_URI")
+    db_name = os.getenv("DATABASE_NAME", "dental_ai")
+    if not mongo_uri:
+        raise RuntimeError("MONGODB_URI environment variable is not set")
+    _mongo_client = AsyncIOMotorClient(mongo_uri)
+    set_db(_mongo_client[db_name])
+    print(f"✅ MongoDB connected to '{db_name}'")
+
     print("🔧 Initializing LLM router...")
     llm_manager.initialize()
     print("✅ LLM router ready")
 
 @app.on_event("shutdown")
 async def shutdown_event():
+    global _mongo_client
+    if _mongo_client:
+        _mongo_client.close()
     print("🛑 Server shutting down...")
 
 # -------------------------------------------------------------------

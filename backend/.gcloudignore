@@ -1,3 +1,7 @@
+.gcloudignore
+.git
+.gitignore
+
 # Python
 __pycache__/
 *.pyc
@@ -9,13 +13,10 @@ env/
 # Node
 node_modules/
 
-# Environment / secrets
+# Secrets
 .env
 .env.*
 *.deploy.yaml
-
-# Git
-.git/
 
 # Local dev
 *.log

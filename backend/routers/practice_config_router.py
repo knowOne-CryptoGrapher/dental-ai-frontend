@@ -67,6 +67,7 @@ async def get_config(practice_id: str, current_user: dict = Depends(require_role
     return {
         "practice_id": practice_id,
         "name": practice.get("name"),
+        "status": practice.get("status", "active"),
         "default_timezone": practice.get("default_timezone"),
         "settings": practice.get("settings"),
     }

@@ -1,0 +1,35 @@
+# Web framework
+fastapi==0.136.3
+uvicorn==0.47.0
+starlette==1.1.0
+
+# Data validation
+pydantic==2.13.4
+email-validator==2.3.0
+
+# Auth
+PyJWT==2.13.0
+bcrypt==5.0.0
+
+# HTTP client
+httpx==0.28.1
+requests==2.34.2
+
+# Database (async MongoDB)
+motor==3.7.1
+pymongo==4.17.0
+
+# LLM providers
+anthropic==0.104.1
+openai==2.38.0
+google-generativeai==0.8.6
+groq==1.2.0
+
+# Payments
+stripe==15.1.0
+
+# Config
+python-dotenv==1.2.2
+
+# Testing
+pytest>=8.0.0
