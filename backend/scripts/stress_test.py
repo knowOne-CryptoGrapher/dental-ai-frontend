@@ -1,161 +1,287 @@
 #!/usr/bin/env python3
 """
-Dental AI Backend — Hard Stress Test Suite
-==========================================
+Dental AI Backend — Production-Grade Stress Test Harness
+=========================================================
+
 Scenarios
-  A  Login storm            – auth throughput, latency distribution, error rate
-  B  Appointment booking race  – concurrent double-booking, cancel/rebook integrity
-  C  Patient creation + lookup – duplicate detection, search consistency
-  D  Mixed traffic soak        – sustained load across all endpoints
+---------
+  A  Login Storm        — N concurrent logins + protected-endpoint call each
+  B  Appointment Race   — N workers race 4 time slots on 1 provider (exposes
+                          non-atomic check_provider_conflicts double-booking)
+  C  Patient Storm      — N concurrent creates + immediate lookup + dup check
+  D  Mixed Soak         — N workers, T seconds, weighted random actions
 
-Usage
-  python stress_test.py                         # run all scenarios
-  python stress_test.py --scenarios A,B         # specific scenarios
-  python stress_test.py --cleanup               # delete test data after run
-  python stress_test.py --scenarios D --duration 600 --concurrency 100
+Post-run
+--------
+  Integrity Sweep — validates global system correctness via public API
+  Cleanup         — removes all [LOAD_TEST]-tagged records (never touches seed)
 
-Env-var overrides (same names as CLI args, uppercase)
-  BASE_URL          https://dental-ai-backend-244697312574.us-west1.run.app
-  ADMIN_EMAIL       admin@dentalai.test
-  ADMIN_PASSWORD    DentalAI2026!
-  PRACTICE_ID       practice-test-001
-  CONCURRENCY       50
-  SOAK_DURATION     120          seconds
-  LOGIN_WORKERS     50
-  BOOKING_WORKERS   150
-  PATIENT_COUNT     300
+Usage examples
+--------------
+  # All scenarios, defaults
+  python backend/scripts/stress_test.py
+
+  # Specific scenarios only
+  python backend/scripts/stress_test.py --scenarios A,B
+
+  # High-concurrency soak + auto-cleanup + JSON log
+  python backend/scripts/stress_test.py --scenarios D --duration 600 \\
+      --concurrency 100 --cleanup --log-file soak.jsonl
+
+  # Clean up a previous run without running scenarios
+  python backend/scripts/stress_test.py --scenarios "" --cleanup
+
+  # Point at local dev server
+  python backend/scripts/stress_test.py --base-url http://localhost:8000
+
+Environment variable overrides (all optional)
+----------------------------------------------
+  STRESS_BASE_URL        STRESS_ADMIN_EMAIL   STRESS_ADMIN_PASS
+  STRESS_PRACTICE_ID     STRESS_CONCURRENCY   STRESS_SOAK_DURATION
+  STRESS_LOGIN_WORKERS   STRESS_BOOKING_WORKERS  STRESS_PATIENT_COUNT
+  STRESS_TIMEOUT
 """
+
+from __future__ import annotations
 
 import argparse
 import asyncio
 import json
-import logging
+import math
 import os
 import random
 import sys
 import time
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
+from datetime import date, datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Configuration
+# CONFIGURATION  (env-var overrides listed in module docstring)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-BASE_URL         = os.getenv("BASE_URL",         "https://dental-ai-backend-244697312574.us-west1.run.app")
-ADMIN_EMAIL      = os.getenv("ADMIN_EMAIL",      "admin@dentalai.test")
-ADMIN_PASSWORD   = os.getenv("ADMIN_PASSWORD",   "DentalAI2026!")
-PRACTICE_ID      = os.getenv("PRACTICE_ID",      "practice-test-001")
-CONCURRENCY      = int(os.getenv("CONCURRENCY",      "50"))
-SOAK_DURATION    = int(os.getenv("SOAK_DURATION",    "120"))
-LOGIN_WORKERS    = int(os.getenv("LOGIN_WORKERS",    "50"))
-BOOKING_WORKERS  = int(os.getenv("BOOKING_WORKERS",  "150"))
-PATIENT_COUNT    = int(os.getenv("PATIENT_COUNT",    "300"))
+BASE_URL       = os.getenv("STRESS_BASE_URL",
+                           "https://dental-ai-backend-244697312574.us-west1.run.app")
+ADMIN_EMAIL    = os.getenv("STRESS_ADMIN_EMAIL", "admin@dentalai.test")
+ADMIN_PASSWORD = os.getenv("STRESS_ADMIN_PASS",  "DentalAI2026!")
+PRACTICE_ID    = os.getenv("STRESS_PRACTICE_ID", "practice-test-001")
 
-# ── Test-data markers ────────────────────────────────────────────────────────
-# All load-test records are tagged so cleanup never touches seed data.
-LOAD_TAG          = "LOAD_TEST"
-LT_EMAIL_SUFFIX   = "+loadtest@stress.test"
-LT_PHONE_PREFIX   = "+1555900"   # reserved range: +15559000000 – +15559009999
+DEFAULT_LOGIN_WORKERS   = int(os.getenv("STRESS_LOGIN_WORKERS",    "50"))
+DEFAULT_BOOKING_WORKERS = int(os.getenv("STRESS_BOOKING_WORKERS", "150"))
+DEFAULT_PATIENT_COUNT   = int(os.getenv("STRESS_PATIENT_COUNT",   "300"))
+DEFAULT_CONCURRENCY     = int(os.getenv("STRESS_CONCURRENCY",      "50"))
+DEFAULT_SOAK_DURATION   = int(os.getenv("STRESS_SOAK_DURATION",   "120"))
+REQUEST_TIMEOUT         = float(os.getenv("STRESS_TIMEOUT",        "30.0"))
 
-# Seed provider IDs from init_db.py — never deleted by cleanup
+MAX_RETRIES     = 2       # retries on network/timeout errors only
+RETRY_BASE_WAIT = 0.25   # seconds; doubled each retry (exponential backoff)
+
+# ── Test-data tagging ─────────────────────────────────────────────────────────
+LOAD_TAG = "[LOAD_TEST]"
+
+# Per-run 3-digit seed embedded in every generated phone number.
+# Ensures runs don't collide with each other in the DB.
+# E.164 pattern: +1 555 {SEED:03d} {seq:04d} → +1 + 10 digits = valid US.
+LT_PHONE_SEED: int = random.randint(100, 999)
+
+# ── Seed data that must never be modified ────────────────────────────────────
 SEED_PROVIDERS = [
     "provider-sarah-lee-001",
     "provider-michael-chen-001",
     "provider-emily-rogers-001",
 ]
 
+SEED_PATIENTS = [
+    {"id": "patient-test-001", "name": "James Harlow",   "phone": "+15552000001"},
+    {"id": "patient-test-002", "name": "Priya Nair",     "phone": "+15552000002"},
+    {"id": "patient-test-003", "name": "Carlos Mendez",  "phone": "+15552000003"},
+    {"id": "patient-test-004", "name": "Aisha Thompson", "phone": "+15552000004"},
+]
+
+SEED_PATIENT_IDS = {p["id"] for p in SEED_PATIENTS}
+
+# ── Domain constants ──────────────────────────────────────────────────────────
+VALID_STATUSES = frozenset({
+    "pending_verification", "pending_review",
+    "scheduled", "completed", "cancelled", "no_show",
+})
+
+SERVICE_TYPES = ["exam", "cleaning", "filling", "consultation", "x-rays", "scaling"]
+
+# Scenario B: race window — 30 days out so it's always a future date
+RACE_PROVIDER = "provider-sarah-lee-001"
+RACE_SLOTS    = ["09:00", "09:30", "10:00", "10:30"]
+RACE_DATE     = (date.today() + timedelta(days=30)).strftime("%Y-%m-%d")
+
+# Scenario D: weighted action pool
+_SOAK_ACTIONS = [
+    ("list_providers",    10),
+    ("list_appointments", 20),
+    ("get_stats",         10),
+    ("get_config",        10),
+    ("create_appointment",25),
+    ("cancel_appointment",15),
+    ("create_patient",    10),
+]
+_SOAK_NAMES, _SOAK_WEIGHTS = zip(*_SOAK_ACTIONS)
+
+# Realistic name pools for generated patient data
+_FIRST = ["Alex","Jordan","Morgan","Taylor","Casey","Riley","Avery","Quinn",
+          "Blake","Cameron","Drew","Harper","Logan","Parker","Reese","Sage",
+          "Jamie","Charlie","Skyler","Dakota","Robin","Adrian","Devon","Finley"]
+_LAST  = ["Smith","Johnson","Williams","Brown","Jones","Garcia","Miller","Davis",
+          "Wilson","Anderson","Thomas","Jackson","White","Harris","Martin","Thompson",
+          "Lee","Patel","Nguyen","Kim","Okafor","Santos","Rivera","Fernandez"]
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Structured logging (JSON-lines to stdout)
+# METRICS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class _JsonFmt(logging.Formatter):
-    def format(self, r: logging.LogRecord) -> str:
-        d: dict = {
-            "ts":  datetime.now(timezone.utc).isoformat(),
-            "lvl": r.levelname,
-            "msg": r.getMessage(),
-        }
-        if isinstance(r.args, dict):
-            d.update(r.args)
-            r.args = None           # prevent double-formatting
-        return json.dumps(d, default=str)
+class EndpointMetrics:
+    """Per-endpoint latency + counters.
 
-_h = logging.StreamHandler(sys.stdout)
-_h.setFormatter(_JsonFmt())
-log = logging.getLogger("stress")
-log.addHandler(_h)
-log.setLevel(logging.INFO)
-log.propagate = False
+    All mutations occur inside the asyncio event loop (single OS thread), so
+    no explicit locking is required — Python's GIL makes individual list.append
+    and integer += operations atomic at the bytecode level.
+    """
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Metrics
-# ═══════════════════════════════════════════════════════════════════════════════
-
-class Metrics:
-    """Thread-/coroutine-safe per-endpoint latency + status counters."""
+    __slots__ = ("latencies", "success", "client_err", "server_err", "net_err")
 
     def __init__(self) -> None:
-        self._lat:  Dict[str, List[float]]       = defaultdict(list)
-        self._cnt:  Dict[str, int]               = defaultdict(int)
-        self._err:  Dict[str, int]               = defaultdict(int)
-        self._sc:   Dict[str, Dict[int, int]]    = defaultdict(lambda: defaultdict(int))
-        self._lock  = asyncio.Lock()
+        self.latencies:  List[float] = []
+        self.success:    int = 0
+        self.client_err: int = 0   # 4xx
+        self.server_err: int = 0   # 5xx
+        self.net_err:    int = 0   # network / timeout after all retries
 
-    async def record(self, label: str, status: int, elapsed_s: float) -> None:
-        async with self._lock:
-            self._lat[label].append(elapsed_s * 1000)
-            self._cnt[label] += 1
-            self._sc[label][status] += 1
-            if status == 0 or status >= 400:
-                self._err[label] += 1
+    def record(self, latency: float, status: int) -> None:
+        self.latencies.append(latency)
+        if 200 <= status < 300:
+            self.success += 1
+        elif 400 <= status < 500:
+            self.client_err += 1
+        elif status >= 500:
+            self.server_err += 1
+        else:
+            self.net_err += 1
 
-    def _pct(self, data: List[float], p: float) -> float:
-        if not data:
+    def record_net_err(self, latency: float) -> None:
+        self.latencies.append(latency)
+        self.net_err += 1
+
+    @property
+    def total(self) -> int:
+        return self.success + self.client_err + self.server_err + self.net_err
+
+    @property
+    def error_rate(self) -> float:
+        t = self.total
+        return 0.0 if not t else round(
+            (self.client_err + self.server_err + self.net_err) / t * 100, 1
+        )
+
+    def pct(self, p: float) -> float:
+        """Return p-th percentile latency in milliseconds."""
+        if not self.latencies:
             return 0.0
-        s = sorted(data)
-        return round(s[min(int(len(s) * p), len(s) - 1)], 1)
+        s = sorted(self.latencies)
+        idx = max(0, min(math.ceil(len(s) * p / 100) - 1, len(s) - 1))
+        return round(s[idx] * 1000, 1)
+
+
+class Metrics:
+    """Global registry: one EndpointMetrics per labelled endpoint + violation log."""
+
+    def __init__(self) -> None:
+        self._ep: Dict[str, EndpointMetrics] = defaultdict(EndpointMetrics)
+        self.violations: List[str] = []
+
+    def record(self, endpoint: str, latency: float, status: int) -> None:
+        self._ep[endpoint].record(latency, status)
+
+    def record_net_err(self, endpoint: str, latency: float) -> None:
+        self._ep[endpoint].record_net_err(latency)
+
+    def violation(self, msg: str) -> None:
+        self.violations.append(msg)
+        print(f"  ✗ INVARIANT VIOLATION: {msg}", flush=True)
+
+    def get(self, endpoint: str) -> EndpointMetrics:
+        return self._ep[endpoint]
 
     def print_summary(self) -> None:
-        width = 70
-        print("\n" + "═" * width)
-        print("  PERFORMANCE SUMMARY")
-        print("═" * width)
-        for label in sorted(self._lat):
-            lats  = self._lat[label]
-            total = self._cnt[label]
-            errs  = self._err.get(label, 0)
-            erate = 100 * errs / max(total, 1)
-            print(f"\n  {label}")
-            print(f"    requests : {total}")
-            print(f"    errors   : {errs}  ({erate:.1f}%)")
-            print(f"    statuses : {dict(sorted(self._sc[label].items()))}")
-            print(f"    p50/p95/p99 ms : "
-                  f"{self._pct(lats,.50)} / {self._pct(lats,.95)} / {self._pct(lats,.99)}")
-            print(f"    min/max ms     : "
-                  f"{self._pct(lats,0):.1f} / {self._pct(lats,1.0):.1f}")
+        W = 88
+        print("\n" + "═" * W)
+        print("  STRESS TEST SUMMARY")
+        print("═" * W)
 
+        fmt = "{:<32} {:>7} {:>7} {:>6} {:>6} {:>8} {:>8} {:>8} {:>6}"
+        print(fmt.format(
+            "ENDPOINT", "TOTAL", "OK", "4xx", "5xx",
+            "p50 ms", "p95 ms", "p99 ms", "ERR%",
+        ))
+        print("─" * W)
+
+        total_req = 0
+        for ep in sorted(self._ep):
+            m = self._ep[ep]
+            if not m.total:
+                continue
+            total_req += m.total
+            print(fmt.format(
+                ep[:32],
+                m.total,
+                m.success,
+                m.client_err,
+                m.server_err + m.net_err,
+                m.pct(50),
+                m.pct(95),
+                m.pct(99),
+                f"{m.error_rate}%",
+            ))
+
+        print("─" * W)
+        print(f"  Total requests dispatched: {total_req}")
+
+        if self.violations:
+            print(f"\n  INVARIANT VIOLATIONS ({len(self.violations)})")
+            for v in self.violations:
+                print(f"    ✗  {v}")
+        else:
+            print("\n  All invariant checks PASSED ✓")
+        print()
+
+
+# Module-level singleton — referenced by all scenario functions
 METRICS = Metrics()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# HTTP client helpers
+# HTTP HELPERS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def _client(token: Optional[str] = None) -> httpx.AsyncClient:
-    hdrs = {"Content-Type": "application/json"}
-    if token:
-        hdrs["Authorization"] = f"Bearer {token}"
+# Set in main() when --log-file is provided
+_log_fh: Optional[Any] = None
+
+
+def _make_client(base_url: str) -> httpx.AsyncClient:
     return httpx.AsyncClient(
-        base_url=BASE_URL,
-        headers=hdrs,
-        timeout=httpx.Timeout(30.0),
-        limits=httpx.Limits(max_connections=1, max_keepalive_connections=1),
+        base_url=base_url,
+        limits=httpx.Limits(
+            max_connections=600,
+            max_keepalive_connections=150,
+            keepalive_expiry=30,
+        ),
+        timeout=httpx.Timeout(REQUEST_TIMEOUT),
+        follow_redirects=True,
     )
+
+
+def _auth_header(token: str) -> Dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
 
 
 async def req(
@@ -164,688 +290,826 @@ async def req(
     path: str,
     label: str,
     *,
-    body:   Optional[dict] = None,
+    token: Optional[str] = None,
+    body: Optional[dict] = None,
     params: Optional[dict] = None,
-    retries: int = 2,
-) -> Tuple[Optional[httpx.Response], float]:
-    """Execute a request, record metrics, retry on transient network errors."""
-    for attempt in range(retries + 1):
-        t0 = time.perf_counter()
+) -> Tuple[int, Optional[Any]]:
+    """Execute one HTTP request with exponential-backoff retry on network errors.
+
+    Returns (http_status_code, parsed_json_or_None).
+    Every outcome (including errors) is recorded in the global METRICS object.
+    """
+    headers = _auth_header(token) if token else {}
+    retries = 0
+    t0 = time.monotonic()
+
+    while True:
         try:
-            resp = await client.request(method, path, json=body, params=params)
-            elapsed = time.perf_counter() - t0
-            await METRICS.record(label, resp.status_code, elapsed)
-            return resp, elapsed
-        except (httpx.ConnectError, httpx.TimeoutException,
-                httpx.RemoteProtocolError, httpx.ReadError) as exc:
-            elapsed = time.perf_counter() - t0
-            await METRICS.record(label, 0, elapsed)
-            if attempt < retries:
-                await asyncio.sleep(0.4 * (attempt + 1))
-            else:
-                log.warning("net_error %s", {"label": label, "error": str(exc)})
-                return None, elapsed
-    return None, 0.0
+            resp = await client.request(
+                method, path,
+                headers=headers,
+                json=body,
+                params=params,
+            )
+            latency = time.monotonic() - t0
+            METRICS.record(label, latency, resp.status_code)
+
+            if _log_fh is not None:
+                _log_fh.write(json.dumps({
+                    "ts":         datetime.now(timezone.utc).isoformat(),
+                    "method":     method,
+                    "path":       path,
+                    "endpoint":   label,
+                    "status":     resp.status_code,
+                    "latency_ms": round(latency * 1000, 1),
+                }) + "\n")
+
+            try:
+                data: Any = resp.json()
+            except Exception:
+                data = resp.text or None
+            return resp.status_code, data
+
+        except (httpx.NetworkError, httpx.TimeoutException) as exc:
+            if retries < MAX_RETRIES:
+                retries += 1
+                await asyncio.sleep(RETRY_BASE_WAIT * (2 ** retries))
+                continue
+            latency = time.monotonic() - t0
+            METRICS.record_net_err(label, latency)
+            if _log_fh is not None:
+                _log_fh.write(json.dumps({
+                    "ts":         datetime.now(timezone.utc).isoformat(),
+                    "method":     method,
+                    "path":       path,
+                    "endpoint":   label,
+                    "status":     0,
+                    "latency_ms": round(latency * 1000, 1),
+                    "error":      str(exc),
+                }) + "\n")
+            return 0, None
 
 
-async def login(email: str, password: str) -> Optional[str]:
-    async with _client() as c:
-        resp, _ = await req(
-            c, "POST", "/api/auth/login", "POST /api/auth/login",
-            body={"email": email, "password": password},
-        )
-    if resp and resp.status_code == 200:
-        return resp.json().get("access_token")
+# ═══════════════════════════════════════════════════════════════════════════════
+# AUTH
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def _login(
+    client: httpx.AsyncClient,
+    email: str = ADMIN_EMAIL,
+    password: str = ADMIN_PASSWORD,
+) -> Optional[str]:
+    """Attempt login; return access_token string or None on failure."""
+    status, data = await req(
+        client, "POST", "/api/auth/login", "auth/login",
+        body={"email": email, "password": password},
+    )
+    if status == 200 and isinstance(data, dict):
+        return data.get("access_token")
     return None
 
 
-async def bootstrap() -> Tuple[str, List[dict], dict]:
-    """Authenticate, load providers and baseline practice config."""
-    token = await login(ADMIN_EMAIL, ADMIN_PASSWORD)
-    if not token:
-        log.error("bootstrap_login_failed %s", {"email": ADMIN_EMAIL})
-        sys.exit(1)
-    log.info("bootstrap_auth_ok %s", {"email": ADMIN_EMAIL})
-
-    async with _client(token) as c:
-        prov_r, _ = await req(c, "GET", "/api/providers", "GET /api/providers")
-        cfg_r, _  = await req(
-            c, "GET", f"/api/practice/{PRACTICE_ID}/config",
-            "GET /api/practice/{id}/config",
-        )
-
-    providers = prov_r.json() if prov_r and prov_r.status_code == 200 else []
-    cfg_before = cfg_r.json() if cfg_r  and cfg_r.status_code  == 200 else {}
-    log.info("bootstrap_ok %s", {"providers": len(providers)})
-    return token, providers, cfg_before
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
-# Test-data generators
+# SCENARIO A — LOGIN STORM
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def lt_phone(n: int) -> str:
-    return f"{LT_PHONE_PREFIX}{n:04d}"
+async def scenario_a(client: httpx.AsyncClient, n_workers: int) -> None:
+    """N concurrent workers: login → store token → call /auth/me with that token."""
+    print(f"\n{'─'*64}", flush=True)
+    print(f"[A] LOGIN STORM  workers={n_workers}", flush=True)
+    print(f"{'─'*64}", flush=True)
 
-def lt_email(n: int) -> str:
-    return f"stress{n:05d}{LT_EMAIL_SUFFIX}"
-
-def next_weekday(offset_days: int = 1) -> str:
-    """Return a YYYY-MM-DD that is at least offset_days away and is Mon–Fri."""
-    d = datetime.now(timezone.utc).date() + timedelta(days=offset_days)
-    while d.weekday() >= 5:          # skip Sat/Sun
-        d += timedelta(days=1)
-    return d.isoformat()
-
-def rand_slot(hour_start: int = 9, hour_end: int = 11) -> str:
-    """Random :00 or :30 slot within [hour_start, hour_end)."""
-    return f"{random.randint(hour_start, hour_end - 1):02d}:{random.choice([0, 30]):02d}"
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Assertion helpers — violations collected here, checked at the end
-# ═══════════════════════════════════════════════════════════════════════════════
-
-VIOLATIONS: List[str] = []
-
-def _vio(scenario: str, rule: str, detail: str) -> None:
-    msg = f"[{scenario}] {rule}: {detail}"
-    VIOLATIONS.append(msg)
-    log.warning("violation %s", {"scenario": scenario, "rule": rule, "detail": detail})
-
-
-def check_no_double_bookings(scenario: str, appointments: List[dict]) -> None:
-    """No two active appointments may share (provider_id, date, time)."""
-    seen: Dict[tuple, str] = {}
-    for apt in appointments:
-        if apt.get("status") in {"cancelled", "no_show"}:
-            continue
-        key = (apt.get("provider_id"), apt.get("appointment_date"), apt.get("appointment_time"))
-        if None in key:
-            continue
-        if key in seen:
-            _vio(scenario, "DOUBLE_BOOKING",
-                 f"provider={key[0]} {key[1]}@{key[2]} "
-                 f"ids=[{seen[key]}, {apt['id']}]")
-        else:
-            seen[key] = apt["id"]
-
-
-def check_valid_statuses(scenario: str, appointments: List[dict]) -> None:
-    valid = {"pending_verification", "pending_review", "scheduled",
-             "completed", "cancelled", "no_show"}
-    for apt in appointments:
-        s = apt.get("status")
-        if s not in valid:
-            _vio(scenario, "INVALID_STATUS",
-                 f"id={apt.get('id')} status={s!r}")
-
-
-def check_referential_integrity(
-    scenario: str,
-    appointments: List[dict],
-    patient_ids: set,
-    provider_ids: set,
-) -> None:
-    for apt in appointments:
-        if apt.get("status") == "cancelled":
-            continue
-        pid  = apt.get("patient_id")
-        prov = apt.get("provider_id")
-        if pid and pid not in patient_ids:
-            _vio(scenario, "ORPHAN_PATIENT_REF",
-                 f"apt={apt.get('id')} patient_id={pid}")
-        if prov and prov not in provider_ids:
-            _vio(scenario, "ORPHAN_PROVIDER_REF",
-                 f"apt={apt.get('id')} provider_id={prov}")
-
-
-def check_settings_immutable(
-    scenario: str,
-    before: dict,
-    after: dict,
-    keys: List[str] = None,
-) -> None:
-    for k in (keys or ["practice_id", "name", "default_timezone"]):
-        if before.get(k) != after.get(k):
-            _vio(scenario, "SETTINGS_MUTATED",
-                 f"key={k!r} before={before.get(k)!r} after={after.get(k)!r}")
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# SCENARIO A — Login storm
-# ═══════════════════════════════════════════════════════════════════════════════
-
-async def scenario_a(n: int = LOGIN_WORKERS) -> None:
-    log.info("scenario_a_start %s", {"workers": n})
-    sem = asyncio.Semaphore(min(n, 100))
-    results: Dict[str, int] = defaultdict(int)
-    lock = asyncio.Lock()
+    token_ok   = 0
+    token_fail = 0
 
     async def worker(_: int) -> None:
-        async with sem:
-            token = await login(ADMIN_EMAIL, ADMIN_PASSWORD)
-        async with lock:
-            if token:
-                results["ok"] += 1
-            else:
-                results["fail"] += 1
+        nonlocal token_ok, token_fail
+        token = await _login(client)
+        if not token:
+            return
+        status, _ = await req(client, "GET", "/api/auth/me", "auth/me", token=token)
+        if status == 200:
+            token_ok += 1
+        else:
+            token_fail += 1
 
-    await asyncio.gather(*[worker(i) for i in range(n)])
-    log.info("scenario_a_done %s", {
-        **results,
-        "success_pct": round(100 * results["ok"] / max(n, 1), 1),
-    })
+    await asyncio.gather(*[worker(i) for i in range(n_workers)])
+
+    m = METRICS.get("auth/login")
+    print(f"  logins      total={m.total}  ok={m.success}  "
+          f"4xx={m.client_err}  5xx/net={m.server_err + m.net_err}")
+    print(f"  token reuse ok={token_ok}  fail={token_fail}")
+    print(f"  latency     p50={m.pct(50)} ms  "
+          f"p95={m.pct(95)} ms  p99={m.pct(99)} ms")
+    print("[A] done", flush=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SCENARIO B — Appointment booking race
+# SCENARIO B — APPOINTMENT BOOKING RACE
 # ═══════════════════════════════════════════════════════════════════════════════
 
-async def scenario_b(token: str, providers: List[dict], n: int = BOOKING_WORKERS) -> None:
-    log.info("scenario_b_start %s", {"workers": n})
+def _appt_payload(patient_idx: int, slot: str, extra_tag: str = "") -> dict:
+    p = SEED_PATIENTS[patient_idx % len(SEED_PATIENTS)]
+    return {
+        "patient_id":       p["id"],
+        "patient_name":     p["name"],
+        "patient_phone":    p["phone"],
+        "appointment_date": RACE_DATE,
+        "appointment_time": slot,
+        "service_type":     "exam",
+        "duration_minutes": 30,
+        "provider_id":      RACE_PROVIDER,
+        "notes":            f"{LOAD_TAG}[SCENARIO_B]{extra_tag}",
+    }
 
-    # Pick the first seeded provider that exists in the DB response
-    prov_ids = {p["id"] for p in providers}
-    provider_id = next(
-        (pid for pid in SEED_PROVIDERS if pid in prov_ids),
-        (providers[0]["id"] if providers else None),
+
+async def scenario_b(
+    client: httpx.AsyncClient,
+    n_workers: int,
+    token: str,
+) -> None:
+    """N workers race 4 time slots on one provider.
+
+    Designed to expose the non-atomic read-then-write in check_provider_conflicts:
+      find_one (no conflict) … find_one (no conflict) … insert … insert  → DOUBLE BOOK
+    """
+    print(f"\n{'─'*64}", flush=True)
+    print(f"[B] APPOINTMENT RACE  workers={n_workers}  "
+          f"provider={RACE_PROVIDER}", flush=True)
+    print(f"     date={RACE_DATE}  slots={RACE_SLOTS}", flush=True)
+    print(f"{'─'*64}", flush=True)
+
+    # Maps appt_id → slot so wave-2 rebooking uses the same slot it freed.
+    created: Dict[str, str] = {}
+    w1_ok = w1_409 = w1_err = 0
+
+    # ── Wave 1: concurrent booking storm ─────────────────────────────────────
+    print("  Wave 1: concurrent create …", flush=True)
+
+    async def book(idx: int) -> None:
+        nonlocal w1_ok, w1_409, w1_err
+        slot = RACE_SLOTS[idx % len(RACE_SLOTS)]
+        status, data = await req(
+            client, "POST", "/api/appointments", "appointments/create",
+            token=token, body=_appt_payload(idx, slot),
+        )
+        if status == 200 and isinstance(data, dict) and data.get("id"):
+            w1_ok += 1
+            created[data["id"]] = slot
+        elif status == 409:
+            w1_409 += 1
+        else:
+            w1_err += 1
+
+    await asyncio.gather(*[book(i) for i in range(n_workers)])
+    print(f"  Wave 1: ok={w1_ok}  409-conflict={w1_409}  err={w1_err}")
+
+    # ── Wave 2: cancel every created appointment, then rebook same slot ───────
+    print("  Wave 2: cancel + rebook …", flush=True)
+
+    w2_cancel = w2_rebook_ok = w2_rebook_409 = 0
+
+    async def cancel_rebook(appt_id: str, idx: int) -> None:
+        nonlocal w2_cancel, w2_rebook_ok, w2_rebook_409
+        slot = created[appt_id]
+
+        status, _ = await req(
+            client, "DELETE", f"/api/appointments/{appt_id}",
+            "appointments/cancel", token=token,
+        )
+        if status != 200:
+            return
+        w2_cancel += 1
+
+        # Rebook the exact slot we just freed — tests that the slot is now open
+        status2, data2 = await req(
+            client, "POST", "/api/appointments", "appointments/create",
+            token=token, body=_appt_payload(idx, slot, extra_tag="[REBOOK]"),
+        )
+        if status2 == 200 and isinstance(data2, dict) and data2.get("id"):
+            w2_rebook_ok += 1
+            created[data2["id"]] = slot   # track rebook ID for cleanup
+        elif status2 == 409:
+            w2_rebook_409 += 1
+
+    # Freeze the wave-1 snapshot before concurrent appends from rebooks
+    snapshot = list(created.items())
+    await asyncio.gather(
+        *[cancel_rebook(aid, i) for i, (aid, _) in enumerate(snapshot)]
     )
-    if not provider_id:
-        log.warning("scenario_b_skipped %s", {"reason": "no providers"})
+    print(f"  Wave 2: cancelled={w2_cancel}  "
+          f"rebook-ok={w2_rebook_ok}  rebook-409={w2_rebook_409}")
+
+    # ── Post-race double-booking assertion ────────────────────────────────────
+    print("  Post-race check …", flush=True)
+
+    status, data = await req(
+        client, "GET", "/api/appointments", "appointments/list",
+        token=token, params={"provider_id": RACE_PROVIDER},
+    )
+    if status != 200 or not isinstance(data, list):
+        METRICS.violation(
+            f"[B] Cannot fetch appointments for post-race check (status={status})"
+        )
+        print("[B] done (post-race check skipped)", flush=True)
         return
 
-    date_str = next_weekday(2)      # two days out to avoid seeded appointments
-    log.info("scenario_b_target %s", {"provider": provider_id, "date": date_str})
+    # Active (non-cancelled) load-test appointments on the race date
+    active = [
+        a for a in data
+        if a.get("appointment_date") == RACE_DATE
+        and a.get("status") not in ("cancelled", "no_show")
+        and LOAD_TAG in (a.get("notes") or "")
+    ]
 
-    # Pre-create/find a throwaway patient for this scenario
-    patient_id: Optional[str] = None
-    async with _client(token) as c:
-        resp, _ = await req(
-            c, "POST", "/api/patients", "POST /api/patients",
+    slot_groups: Dict[str, List[str]] = defaultdict(list)
+    for a in active:
+        slot_groups[a.get("appointment_time", "?")].append(a.get("id", "?"))
+
+    double_booked = {s: ids for s, ids in slot_groups.items() if len(ids) > 1}
+    if double_booked:
+        for slot, ids in double_booked.items():
+            METRICS.violation(
+                f"[B] Double-booking: {RACE_PROVIDER} @ {RACE_DATE} {slot} "
+                f"— {len(ids)} active appointments {ids}"
+            )
+    else:
+        print(f"  No double-bookings detected across {len(RACE_SLOTS)} slots ✓")
+
+    # Status validity
+    for a in active:
+        if a.get("status") not in VALID_STATUSES:
+            METRICS.violation(
+                f"[B] Invalid status '{a.get('status')}' on id={a.get('id')}"
+            )
+
+    print(f"  Active test appointments after race: {len(active)}")
+    print("[B] done", flush=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SCENARIO C — PATIENT CREATION STORM
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _lt_phone(idx: int) -> str:
+    """E.164 load-test phone unique to this run + index.
+    Pattern: +1 555 {seed:03d} {idx:04d}  →  +1 + 10 digits."""
+    return f"+1555{LT_PHONE_SEED:03d}{idx:04d}"
+
+
+def _lt_email(idx: int) -> str:
+    return f"lt{LT_PHONE_SEED:03d}{idx:04d}@stress.test"
+
+
+async def scenario_c(
+    client: httpx.AsyncClient,
+    n_patients: int,
+    token: str,
+) -> None:
+    """N concurrent patient creates + sampled lookup verification + dup-rate check."""
+    print(f"\n{'─'*64}", flush=True)
+    print(f"[C] PATIENT STORM  count={n_patients}  "
+          f"phone-seed={LT_PHONE_SEED}", flush=True)
+    print(f"{'─'*64}", flush=True)
+
+    created: Dict[int, str] = {}   # idx → patient_id for lookup verification
+    c_ok = c_409 = c_err = 0
+
+    async def create_worker(idx: int) -> None:
+        nonlocal c_ok, c_409, c_err
+        fname = _FIRST[idx % len(_FIRST)]
+        lname = _LAST[(idx // len(_FIRST)) % len(_LAST)]
+        dob_y = 1950 + (idx % 55)
+        dob_m = (idx % 12) + 1
+        dob_d = (idx % 28) + 1
+
+        status, data = await req(
+            client, "POST", "/api/patients", "patients/create",
+            token=token,
             body={
-                "name":  f"{LOAD_TAG} Race Patient",
-                "phone": lt_phone(0),
-                "email": f"race{LT_EMAIL_SUFFIX}",
-                "notes": LOAD_TAG,
+                "name":              f"{fname} {lname}",
+                "phone":             _lt_phone(idx),
+                "email":             _lt_email(idx),
+                "date_of_birth":     f"{dob_y}-{dob_m:02d}-{dob_d:02d}",
+                "preferred_contact": "phone",
+                "notes":             f"{LOAD_TAG}[SCENARIO_C]",
             },
         )
-        if resp and resp.status_code == 200:
-            patient_id = resp.json()["id"]
-        elif resp and resp.status_code == 409:
-            detail = resp.json().get("detail", {})
-            patient_id = (detail.get("patient") or {}).get("id") if isinstance(detail, dict) else None
+        if status == 200 and isinstance(data, dict) and data.get("id"):
+            c_ok += 1
+            created[idx] = data["id"]
+        elif status == 409:
+            c_409 += 1
+        else:
+            c_err += 1
 
-    if not patient_id:
-        log.warning("scenario_b_skipped %s", {"reason": "could not create race patient"})
+    await asyncio.gather(*[create_worker(i) for i in range(n_patients)])
+    print(f"  creates: ok={c_ok}  409-dup={c_409}  err={c_err}")
+
+    if not created:
+        print("  No patients created — skipping lookup verification")
+        print("[C] done", flush=True)
         return
 
-    # ── Wave 1: N workers race to book 4 possible slots ─────────────────────
-    # Only 4 distinct slots → massive collision pressure
-    sem = asyncio.Semaphore(min(n, 200))
-    created_ids:  List[str] = []
-    results = defaultdict(int)
-    lock = asyncio.Lock()
+    # ── Sample lookups: verify ~10% of created patients ───────────────────────
+    sample_size = max(5, len(created) // 10)
+    sample_idxs = random.sample(list(created.keys()), min(sample_size, len(created)))
 
-    async def book_worker(wid: int) -> None:
-        async with sem:
-            slot = rand_slot(9, 11)          # 09:00 / 09:30 / 10:00 / 10:30
-            async with _client(token) as c:
-                resp, _ = await req(
-                    c, "POST", "/api/appointments", "POST /api/appointments",
-                    body={
-                        "patient_id":       patient_id,
-                        "patient_name":     f"{LOAD_TAG} Race Patient",
-                        "patient_phone":    lt_phone(0),
-                        "appointment_date": date_str,
-                        "appointment_time": slot,
-                        "service_type":     "cleaning",
-                        "duration_minutes": 30,
-                        "provider_id":      provider_id,
-                        "notes":            f"{LOAD_TAG} race wid={wid}",
-                    },
-                )
-        async with lock:
-            if resp and resp.status_code == 200:
-                results["created"] += 1
-                aid = resp.json().get("id")
-                if aid:
-                    created_ids.append(aid)
-            elif resp and resp.status_code == 409:
-                results["conflict_409"] += 1
-            else:
-                results["other_error"] += 1
+    lk_ok = lk_fail = lk_mismatch = 0
 
-    await asyncio.gather(*[book_worker(i) for i in range(n)])
-    log.info("scenario_b_wave1 %s", {**results, "ids": len(created_ids)})
+    async def verify_worker(idx: int) -> None:
+        nonlocal lk_ok, lk_fail, lk_mismatch
+        pid            = created[idx]
+        expected_phone = _lt_phone(idx)
 
-    # ── Wave 2: cancel first half, immediately rebook ─────────────────────
-    half = created_ids[: len(created_ids) // 2]
-
-    async def cancel_rebook(appt_id: str, wid: int) -> None:
-        async with sem:
-            async with _client(token) as c:
-                await req(
-                    c, "DELETE", f"/api/appointments/{appt_id}",
-                    "DELETE /api/appointments/{id}",
-                )
-            async with _client(token) as c:
-                await req(
-                    c, "POST", "/api/appointments", "POST /api/appointments",
-                    body={
-                        "patient_id":       patient_id,
-                        "patient_name":     f"{LOAD_TAG} Race Patient",
-                        "patient_phone":    lt_phone(0),
-                        "appointment_date": date_str,
-                        "appointment_time": rand_slot(9, 11),
-                        "service_type":     "cleaning",
-                        "duration_minutes": 30,
-                        "provider_id":      provider_id,
-                        "notes":            f"{LOAD_TAG} rebook wid={wid}",
-                    },
-                )
-
-    await asyncio.gather(*[cancel_rebook(aid, i) for i, aid in enumerate(half)])
-
-    # ── Post-race assertions ────────────────────────────────────────────────
-    await asyncio.sleep(1)      # allow in-flight writes to settle
-    async with _client(token) as c:
-        resp, _ = await req(
-            c, "GET", "/api/appointments", "GET /api/appointments",
-            params={"provider_id": provider_id},
+        status, data = await req(
+            client, "GET", f"/api/patients/{pid}", "patients/get", token=token,
         )
-    all_for_prov = resp.json() if resp and resp.status_code == 200 else []
-    lt_apts = [a for a in all_for_prov if LOAD_TAG in (a.get("notes") or "")]
-
-    check_no_double_bookings("B", lt_apts)
-    check_valid_statuses("B", lt_apts)
-
-    log.info("scenario_b_done %s", {
-        **results,
-        "lt_appointments": len(lt_apts),
-        "violations": len(VIOLATIONS),
-    })
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# SCENARIO C — Patient creation + lookup
-# ═══════════════════════════════════════════════════════════════════════════════
-
-async def scenario_c(token: str, n: int = PATIENT_COUNT) -> None:
-    log.info("scenario_c_start %s", {"n_patients": n})
-    sem   = asyncio.Semaphore(CONCURRENCY)
-    lock  = asyncio.Lock()
-    created: List[dict] = []
-    results: Dict[str, int] = defaultdict(int)
-
-    # ── Concurrent creates ──────────────────────────────────────────────────
-    async def create_worker(i: int) -> None:
-        async with sem:
-            phone = lt_phone(1000 + i)
-            email = lt_email(i)
-            async with _client(token) as c:
-                resp, _ = await req(
-                    c, "POST", "/api/patients", "POST /api/patients",
-                    body={
-                        "name":          f"{LOAD_TAG} Patient {i:05d}",
-                        "phone":         phone,
-                        "email":         email,
-                        "date_of_birth": "1990-03-22",
-                        "notes":         LOAD_TAG,
-                    },
-                )
-        async with lock:
-            if resp and resp.status_code == 200:
-                results["created"] += 1
-                created.append({"id": resp.json()["id"], "phone": phone, "email": email})
-            elif resp and resp.status_code == 409:
-                results["dup_409"] += 1
+        if status == 200 and isinstance(data, dict):
+            if data.get("phone") == expected_phone:
+                lk_ok += 1
             else:
-                results["error"] += 1
-
-    await asyncio.gather(*[create_worker(i) for i in range(n)])
-    log.info("scenario_c_creates %s", dict(results))
-
-    # ── Concurrent lookups on a sample of freshly created patients ─────────
-    sample   = random.sample(created, min(60, len(created)))
-    ok_lock  = asyncio.Lock()
-    lu_ok = 0
-    lu_fail = 0
-
-    async def lookup_worker(p: dict) -> None:
-        nonlocal lu_ok, lu_fail
-        async with sem:
-            async with _client(token) as c:
-                resp, _ = await req(
-                    c, "GET", f"/api/patients/{p['id']}", "GET /api/patients/{id}",
+                lk_mismatch += 1
+                METRICS.violation(
+                    f"[C] Phone mismatch on patient {pid}: "
+                    f"got={data.get('phone')}  expected={expected_phone}"
                 )
-        async with ok_lock:
-            if resp and resp.status_code == 200:
-                data = resp.json()
-                if data.get("phone") == p["phone"] and data.get("email") == p["email"]:
-                    lu_ok += 1
-                else:
-                    lu_fail += 1
-                    _vio("C", "LOOKUP_MISMATCH",
-                         f"id={p['id']} expected_phone={p['phone']} got={data.get('phone')}")
-            else:
-                lu_fail += 1
-                _vio("C", "LOOKUP_404",
-                     f"id={p['id']} status={resp.status_code if resp else 0}")
+        else:
+            lk_fail += 1
+            METRICS.violation(
+                f"[C] Lookup failed: patient_id={pid} status={status}"
+            )
 
-    await asyncio.gather(*[lookup_worker(p) for p in sample])
+    await asyncio.gather(*[verify_worker(i) for i in sample_idxs])
+    print(f"  lookups (sample n={len(sample_idxs)}): "
+          f"ok={lk_ok}  fail={lk_fail}  mismatch={lk_mismatch}")
 
-    # ── Duplicate check via full patient list ───────────────────────────────
-    async with _client(token) as c:
-        resp, _ = await req(c, "GET", "/api/patients", "GET /api/patients")
-    all_pts = resp.json() if resp and resp.status_code == 200 else []
-    lt_pts  = [p for p in all_pts if LOAD_TAG in (p.get("notes") or "")]
+    # ── Duplicate-rate assertion ───────────────────────────────────────────────
+    # A small number of 409s is acceptable — leftover patients from a prior run
+    # that wasn't cleaned up.  Threshold: 2% of the requested count.
+    dup_threshold = max(5, int(n_patients * 0.02))
+    if c_409 > dup_threshold:
+        METRICS.violation(
+            f"[C] Excessive duplicates: {c_409}/{n_patients} 409s exceed "
+            f"threshold {dup_threshold} — run --cleanup to remove stale data"
+        )
+    else:
+        print(f"  Duplicate rate {c_409}/{n_patients} within threshold ✓")
 
-    phone_count: Dict[str, int] = defaultdict(int)
-    for p in lt_pts:
-        phone_count[p.get("phone", "")] += 1
-    dupes = {ph: cnt for ph, cnt in phone_count.items() if cnt > 1}
-    if dupes:
-        _vio("C", "DUPLICATE_PATIENTS",
-             f"phones_with_dupes={json.dumps(dupes)}")
-
-    log.info("scenario_c_done %s", {
-        "lookup_ok":        lu_ok,
-        "lookup_fail":      lu_fail,
-        "lt_patients_in_db": len(lt_pts),
-        "duplicate_phones": len(dupes),
-        "violations":       len(VIOLATIONS),
-    })
+    print(f"[C] done  patients_created={len(created)}", flush=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SCENARIO D — Mixed traffic soak
+# SCENARIO D — MIXED SOAK TEST
 # ═══════════════════════════════════════════════════════════════════════════════
 
 async def scenario_d(
-    token:      str,
-    providers:  List[dict],
-    duration_s: int = SOAK_DURATION,
-    concurrency: int = CONCURRENCY,
+    client: httpx.AsyncClient,
+    n_workers: int,
+    duration: int,
+    token: str,
 ) -> None:
-    log.info("scenario_d_start %s", {"duration_s": duration_s, "concurrency": concurrency})
+    """N workers execute weighted-random actions continuously for T seconds."""
+    print(f"\n{'─'*64}", flush=True)
+    print(f"[D] MIXED SOAK  workers={n_workers}  duration={duration}s", flush=True)
+    print(f"{'─'*64}", flush=True)
 
-    prov_ids = [p["id"] for p in providers] or SEED_PROVIDERS[:]
-    deadline = time.monotonic() + duration_s
-    sem      = asyncio.Semaphore(concurrency)
+    stop           = asyncio.Event()
+    soak_appt_ids: List[str] = []
+    action_count   = 0
 
-    # Shared pool of cancelable load-test appointment IDs
-    live: List[str] = []
-    live_lock = asyncio.Lock()
+    async def worker(worker_id: int) -> None:
+        nonlocal action_count
+        while not stop.is_set():
+            action = random.choices(_SOAK_NAMES, weights=_SOAK_WEIGHTS, k=1)[0]
 
-    # Pre-create a reusable soak patient
-    patient_id: Optional[str] = None
-    async with _client(token) as c:
-        resp, _ = await req(
-            c, "POST", "/api/patients", "POST /api/patients",
-            body={
-                "name":  f"{LOAD_TAG} Soak Patient",
-                "phone": lt_phone(9999),
-                "email": f"soak{LT_EMAIL_SUFFIX}",
-                "notes": LOAD_TAG,
-            },
-        )
-        if resp and resp.status_code == 200:
-            patient_id = resp.json()["id"]
-        elif resp and resp.status_code == 409:
-            detail = resp.json().get("detail", {})
-            patient_id = (detail.get("patient") or {}).get("id") if isinstance(detail, dict) else None
+            if action == "list_providers":
+                await req(client, "GET", "/api/providers",
+                          "providers/list", token=token)
 
-    if not patient_id:
-        log.warning("scenario_d_no_patient %s", {"reason": "cannot create soak patient"})
-        return
+            elif action == "list_appointments":
+                await req(client, "GET", "/api/appointments",
+                          "appointments/list", token=token)
 
-    # ── Action functions ────────────────────────────────────────────────────
+            elif action == "get_stats":
+                await req(client, "GET", "/api/stats",
+                          "stats/get", token=token)
 
-    async def act_list_providers(c: httpx.AsyncClient) -> None:
-        await req(c, "GET", "/api/providers", "GET /api/providers")
+            elif action == "get_config":
+                await req(client, "GET", f"/api/practice/{PRACTICE_ID}/config",
+                          "practice/config", token=token)
 
-    async def act_list_appointments(c: httpx.AsyncClient) -> None:
-        await req(c, "GET", "/api/appointments", "GET /api/appointments")
+            elif action == "create_appointment":
+                p    = random.choice(SEED_PATIENTS)
+                slot = random.choice(RACE_SLOTS)
+                prov = random.choice(SEED_PROVIDERS)
+                status, data = await req(
+                    client, "POST", "/api/appointments", "appointments/create",
+                    token=token,
+                    body={
+                        "patient_id":       p["id"],
+                        "patient_name":     p["name"],
+                        "patient_phone":    p["phone"],
+                        "appointment_date": RACE_DATE,
+                        "appointment_time": slot,
+                        "service_type":     random.choice(SERVICE_TYPES),
+                        "duration_minutes": 30,
+                        "provider_id":      prov,
+                        "notes":            f"{LOAD_TAG}[SCENARIO_D]",
+                    },
+                )
+                if status == 200 and isinstance(data, dict) and data.get("id"):
+                    soak_appt_ids.append(data["id"])
 
-    async def act_get_stats(c: httpx.AsyncClient) -> None:
-        await req(c, "GET", "/api/stats", "GET /api/stats")
+            elif action == "cancel_appointment":
+                if soak_appt_ids:
+                    appt_id = soak_appt_ids.pop(
+                        random.randrange(len(soak_appt_ids))
+                    )
+                    await req(client, "DELETE", f"/api/appointments/{appt_id}",
+                              "appointments/cancel", token=token)
 
-    async def act_practice_config(c: httpx.AsyncClient) -> None:
-        await req(
-            c, "GET", f"/api/practice/{PRACTICE_ID}/config",
-            "GET /api/practice/{id}/config",
-        )
+            elif action == "create_patient":
+                # Use +1444 prefix (differs from Scenario C's +1555) to avoid
+                # cross-scenario phone collisions within the same run.
+                rnd   = random.randint(0, 9999)
+                phone = f"+1444{LT_PHONE_SEED:03d}{rnd:04d}"
+                await req(
+                    client, "POST", "/api/patients", "patients/create",
+                    token=token,
+                    body={
+                        "name":  f"SoakUser{rnd:04d}",
+                        "phone": phone,
+                        "notes": f"{LOAD_TAG}[SCENARIO_D]",
+                    },
+                )
 
-    async def act_create_appointment(c: httpx.AsyncClient) -> None:
-        prov  = random.choice(prov_ids)
-        date  = next_weekday(random.randint(3, 14))
-        slot  = rand_slot(9, 16)
-        resp, _ = await req(
-            c, "POST", "/api/appointments", "POST /api/appointments",
-            body={
-                "patient_id":       patient_id,
-                "patient_name":     f"{LOAD_TAG} Soak Patient",
-                "patient_phone":    lt_phone(9999),
-                "appointment_date": date,
-                "appointment_time": slot,
-                "service_type":     random.choice(["cleaning", "exam", "filling", "scaling"]),
-                "duration_minutes": 30,
-                "provider_id":      prov,
-                "notes":            f"{LOAD_TAG} soak",
-            },
-        )
-        if resp and resp.status_code == 200:
-            aid = resp.json().get("id")
-            if aid:
-                async with live_lock:
-                    live.append(aid)
+            action_count += 1
+            await asyncio.sleep(0)   # yield so stopper coroutine can set the event
 
-    async def act_cancel_appointment(c: httpx.AsyncClient) -> None:
-        async with live_lock:
-            if not live:
-                return
-            aid = live.pop(random.randrange(len(live)))
-        await req(c, "DELETE", f"/api/appointments/{aid}",
-                  "DELETE /api/appointments/{id}")
+    async def stopper() -> None:
+        await asyncio.sleep(duration)
+        stop.set()
 
-    # weighted action pool — edit weights here to tune traffic mix
-    ACTIONS = [
-        (act_list_providers,      3),
-        (act_list_appointments,   3),
-        (act_get_stats,           2),
-        (act_practice_config,     1),
-        (act_create_appointment,  4),
-        (act_cancel_appointment,  2),
-    ]
-    pool: List = []
-    for fn, w in ACTIONS:
-        pool.extend([fn] * w)
+    t0 = time.monotonic()
+    await asyncio.gather(*[worker(i) for i in range(n_workers)], stopper())
+    elapsed = time.monotonic() - t0
 
-    completed = 0
-    c_lock    = asyncio.Lock()
-
-    async def worker() -> None:
-        nonlocal completed
-        while time.monotonic() < deadline:
-            fn = random.choice(pool)
-            async with sem:
-                async with _client(token) as c:
-                    await fn(c)
-            async with c_lock:
-                completed += 1
-
-    tasks = [asyncio.create_task(worker()) for _ in range(concurrency)]
-    await asyncio.gather(*tasks)
-
-    log.info("scenario_d_done %s", {
-        "requests_completed": completed,
-        "duration_s":         duration_s,
-    })
+    rps = action_count / elapsed if elapsed > 0 else 0
+    print(f"  Total actions: {action_count}  ({rps:.1f} req/s over {elapsed:.1f}s)")
+    print("[D] done", flush=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Post-run integrity sweep
+# INTEGRITY SWEEP
 # ═══════════════════════════════════════════════════════════════════════════════
 
 async def integrity_sweep(
-    token:      str,
-    providers:  List[dict],
-    cfg_before: dict,
+    client: httpx.AsyncClient,
+    token: str,
+    initial_config: dict,
 ) -> None:
-    log.info("integrity_sweep_start")
+    """Fetch all data via the public API and assert global consistency invariants."""
+    print(f"\n{'─'*64}", flush=True)
+    print("[SWEEP] Running integrity sweep …", flush=True)
+    print(f"{'─'*64}", flush=True)
 
-    async with _client(token) as c:
-        a_r, _ = await req(c, "GET", "/api/appointments", "GET /api/appointments")
-        p_r, _ = await req(c, "GET", "/api/patients",     "GET /api/patients")
-        cfg_r, _ = await req(
-            c, "GET", f"/api/practice/{PRACTICE_ID}/config",
-            "GET /api/practice/{id}/config",
+    _, appointments = await req(client, "GET", "/api/appointments",
+                                "sweep/appointments", token=token)
+    _, patients     = await req(client, "GET", "/api/patients",
+                                "sweep/patients",     token=token)
+    _, providers    = await req(client, "GET", "/api/providers",
+                                "sweep/providers",    token=token)
+    _, curr_config  = await req(client, "GET", f"/api/practice/{PRACTICE_ID}/config",
+                                "sweep/config",       token=token)
+
+    appointments = appointments if isinstance(appointments, list) else []
+    patients     = patients     if isinstance(patients,     list) else []
+    providers    = providers    if isinstance(providers,    list) else []
+
+    patient_ids  = {p["id"] for p in patients}
+    provider_ids = {p["id"] for p in providers}
+
+    print(f"  Loaded: {len(appointments)} appointments | "
+          f"{len(patients)} patients | {len(providers)} providers")
+
+    v_before = len(METRICS.violations)
+
+    # ── 1. No double-bookings anywhere in the system ──────────────────────────
+    slot_map: Dict[Tuple[str, str, str], List[str]] = defaultdict(list)
+    for a in appointments:
+        if a.get("status") not in ("cancelled", "no_show"):
+            pvid = a.get("provider_id") or ""
+            dt   = a.get("appointment_date") or ""
+            tm   = a.get("appointment_time") or ""
+            if pvid and dt and tm:
+                slot_map[(pvid, dt, tm)].append(a.get("id", "?"))
+
+    for (pvid, dt, tm), ids in slot_map.items():
+        if len(ids) > 1:
+            METRICS.violation(
+                f"[SWEEP] Double-booking provider={pvid} {dt} {tm} "
+                f"— {len(ids)} active: {ids}"
+            )
+
+    # ── 2. All appointment statuses are valid ─────────────────────────────────
+    for a in appointments:
+        s = a.get("status")
+        if s not in VALID_STATUSES:
+            METRICS.violation(
+                f"[SWEEP] Invalid status '{s}' on appointment id={a.get('id')}"
+            )
+
+    # ── 3. Referential integrity ──────────────────────────────────────────────
+    # The API only returns documents visible to this practice, so unknown IDs
+    # genuinely mean broken references.
+    for a in appointments:
+        pid  = a.get("patient_id")
+        pvid = a.get("provider_id")
+        if pid and pid not in patient_ids and pid not in SEED_PATIENT_IDS:
+            METRICS.violation(
+                f"[SWEEP] Appointment {a.get('id')} → unknown patient_id={pid}"
+            )
+        if pvid and pvid not in provider_ids:
+            METRICS.violation(
+                f"[SWEEP] Appointment {a.get('id')} → unknown provider_id={pvid}"
+            )
+
+    # ── 4. Practice settings immutability ─────────────────────────────────────
+    if isinstance(curr_config, dict) and isinstance(initial_config, dict):
+        c_s = curr_config.get("settings") or {}
+        i_s = initial_config.get("settings") or {}
+        for section in ("branding", "emergency"):
+            if i_s.get(section) and c_s.get(section) != i_s.get(section):
+                METRICS.violation(
+                    f"[SWEEP] settings['{section}'] mutated during test run"
+                )
+
+    # ── 5. No orphaned active appointments ───────────────────────────────────
+    orphaned = [
+        a["id"] for a in appointments
+        if a.get("patient_id")
+        and a["patient_id"] not in patient_ids
+        and a["patient_id"] not in SEED_PATIENT_IDS
+        and a.get("status") not in ("cancelled", "no_show")
+    ]
+    if orphaned:
+        METRICS.violation(
+            f"[SWEEP] {len(orphaned)} orphaned active appointments reference "
+            f"missing patients: {orphaned[:5]}{'…' if len(orphaned) > 5 else ''}"
         )
 
-    all_apts  = a_r.json() if a_r  and a_r.status_code  == 200 else []
-    all_pts   = p_r.json() if p_r  and p_r.status_code  == 200 else []
-    cfg_after = cfg_r.json() if cfg_r and cfg_r.status_code == 200 else {}
+    new_v = len(METRICS.violations) - v_before
+    if new_v == 0:
+        print("  All integrity checks passed ✓")
+    else:
+        print(f"  {new_v} violation(s) found — see summary below")
 
-    pt_ids   = {p["id"] for p in all_pts}
-    prov_ids = {p["id"] for p in providers}
-
-    check_no_double_bookings   ("POST_RUN", all_apts)
-    check_valid_statuses       ("POST_RUN", all_apts)
-    check_referential_integrity("POST_RUN", all_apts, pt_ids, prov_ids)
-    check_settings_immutable   ("POST_RUN", cfg_before, cfg_after)
-
-    log.info("integrity_sweep_done %s", {
-        "total_appointments": len(all_apts),
-        "total_patients":     len(all_pts),
-        "violations":         len(VIOLATIONS),
-    })
+    print("[SWEEP] done", flush=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Cleanup — remove LOAD_TAG-tagged records only
+# CLEANUP
 # ═══════════════════════════════════════════════════════════════════════════════
 
-async def cleanup(token: str) -> None:
-    log.info("cleanup_start")
+async def cleanup(client: httpx.AsyncClient, token: str) -> None:
+    """Cancel all LOAD_TAG-tagged appointments and delete LOAD_TAG-tagged patients.
 
-    async with _client(token) as c:
-        a_r, _ = await req(c, "GET", "/api/appointments", "GET /api/appointments")
-        p_r, _ = await req(c, "GET", "/api/patients",     "GET /api/patients")
+    Seed providers and SEED_PATIENTS are never touched.
+    """
+    print(f"\n{'─'*64}", flush=True)
+    print(f"[CLEANUP] Removing {LOAD_TAG}-tagged records …", flush=True)
+    print(f"{'─'*64}", flush=True)
 
-    all_apts = a_r.json() if a_r and a_r.status_code == 200 else []
-    all_pts  = p_r.json() if p_r and p_r.status_code == 200 else []
+    _, appointments = await req(client, "GET", "/api/appointments",
+                                "cleanup/list_appts",    token=token)
+    _, patients     = await req(client, "GET", "/api/patients",
+                                "cleanup/list_patients", token=token)
 
-    lt_apts = [a for a in all_apts if LOAD_TAG in (a.get("notes") or "")]
-    lt_pts  = [p for p in all_pts  if LOAD_TAG in (p.get("notes") or "")]
+    appointments = appointments if isinstance(appointments, list) else []
+    patients     = patients     if isinstance(patients,     list) else []
 
-    sem = asyncio.Semaphore(40)
+    lt_appts = [
+        a for a in appointments
+        if LOAD_TAG in (a.get("notes") or "")
+    ]
+    lt_patients = [
+        p for p in patients
+        if LOAD_TAG in (p.get("notes") or "")
+        and p.get("id") not in SEED_PATIENT_IDS
+    ]
 
-    async def cancel(aid: str) -> None:
+    print(f"  Found: {len(lt_appts)} appointments, {len(lt_patients)} patients to remove")
+
+    appts_done    = 0
+    patients_done = 0
+
+    # Semaphore to avoid overwhelming the DB with hundreds of parallel deletes
+    sem = asyncio.Semaphore(20)
+
+    async def cancel_appt(appt_id: str) -> None:
+        nonlocal appts_done
         async with sem:
-            async with _client(token) as c:
-                await req(c, "DELETE", f"/api/appointments/{aid}",
-                          "DELETE /api/appointments/{id}")
+            status, _ = await req(client, "DELETE", f"/api/appointments/{appt_id}",
+                                  "cleanup/cancel_appt", token=token)
+            if status == 200:
+                appts_done += 1
 
-    async def delete_pt(pid: str) -> None:
+    async def delete_patient(patient_id: str) -> None:
+        nonlocal patients_done
         async with sem:
-            async with _client(token) as c:
-                await req(c, "DELETE", f"/api/patients/{pid}",
-                          "DELETE /api/patients/{id}")
+            status, _ = await req(client, "DELETE", f"/api/patients/{patient_id}",
+                                  "cleanup/delete_patient", token=token)
+            if status == 200:
+                patients_done += 1
 
-    await asyncio.gather(*[cancel(a["id"]) for a in lt_apts])
-    await asyncio.gather(*[delete_pt(p["id"]) for p in lt_pts])
+    await asyncio.gather(*[cancel_appt(a["id"]) for a in lt_appts])
+    await asyncio.gather(*[delete_patient(p["id"]) for p in lt_patients])
 
-    log.info("cleanup_done %s", {
-        "appointments_cancelled": len(lt_apts),
-        "patients_deleted":       len(lt_pts),
-    })
+    print(f"  Removed: {appts_done}/{len(lt_appts)} appointments  "
+          f"{patients_done}/{len(lt_patients)} patients")
+    print("[CLEANUP] done", flush=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Main
+# README FOOTER  (printed at end of every run)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-async def main(scenarios: List[str], do_cleanup: bool) -> None:
-    banner = (
-        f"\n{'═'*70}\n"
-        f"  Dental AI Stress Test\n"
-        f"  base_url    : {BASE_URL}\n"
-        f"  scenarios   : {','.join(scenarios)}\n"
-        f"  concurrency : {CONCURRENCY}\n"
-        f"  soak        : {SOAK_DURATION}s\n"
-        f"{'═'*70}\n"
+_README = """
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  HOW TO CONFIGURE                                                             │
+│                                                                              │
+│  CLI flags (override defaults):                                              │
+│    --base-url URL          Backend root (default: prod Cloud Run)            │
+│    --scenarios A,B,C,D    Subset to run   (default: all four)               │
+│    --login-workers N      Concurrent logins for Scenario A  (default: 50)   │
+│    --booking-workers N    Concurrent bookers for Scenario B (default: 150)  │
+│    --patient-count N      Patients to create in Scenario C (default: 300)   │
+│    --concurrency N        Workers for Scenario D soak      (default: 50)    │
+│    --duration N           Soak seconds for Scenario D      (default: 120)   │
+│    --cleanup              Delete [LOAD_TEST] records after run               │
+│    --no-sweep             Skip integrity sweep                               │
+│    --log-file PATH        Write JSON-line request log to file                │
+│                                                                              │
+│  HOW TO CLEAN UP TEST DATA                                                   │
+│                                                                              │
+│  All test records carry "[LOAD_TEST]" in their notes field.                 │
+│  Seed providers and patients (patient-test-00*) are NEVER modified.         │
+│                                                                              │
+│    Auto-clean after run:                                                     │
+│      python backend/scripts/stress_test.py --cleanup                         │
+│                                                                              │
+│    Clean without re-running:                                                 │
+│      python backend/scripts/stress_test.py --scenarios "" --cleanup          │
+│                                                                              │
+│  HOW TO INTERPRET THE SUMMARY TABLE                                          │
+│                                                                              │
+│    TOTAL   total HTTP requests sent to that endpoint                         │
+│    OK      2xx responses                                                     │
+│    4xx     client errors (conflict, not-found, unauthorized)                 │
+│    5xx     server errors + network/timeout failures                          │
+│    p50 ms  median round-trip latency in milliseconds                         │
+│    p95 ms  95th-percentile latency (tail latency)                            │
+│    p99 ms  99th-percentile latency (worst-case tail)                         │
+│    ERR%    (4xx + 5xx + net-err) / total x 100                               │
+│                                                                              │
+│  NOTE: 409s on appointments/create during Scenario B are EXPECTED when      │
+│  the conflict check fires correctly.  A "[B] Double-booking" violation       │
+│  means two workers BOTH passed the check and BOTH inserted — that is the    │
+│  real bug in check_provider_conflicts (non-atomic read-then-write).          │
+│                                                                              │
+│  Exit code: 0 = all invariants passed     1 = one or more violations        │
+└──────────────────────────────────────────────────────────────────────────────┘
+"""
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CLI + MAIN
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        description="Dental AI backend — production-grade stress test harness",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="See module docstring for full usage examples.",
     )
-    print(banner)
+    p.add_argument("--base-url",
+                   default=BASE_URL,
+                   help="Backend root URL")
+    p.add_argument("--scenarios",
+                   default="A,B,C,D",
+                   help="Comma-separated subset, e.g. A,B  (empty string = none)")
+    p.add_argument("--concurrency",
+                   type=int, default=DEFAULT_CONCURRENCY,
+                   metavar="N")
+    p.add_argument("--duration",
+                   type=int, default=DEFAULT_SOAK_DURATION,
+                   metavar="SECONDS")
+    p.add_argument("--login-workers",
+                   type=int, default=DEFAULT_LOGIN_WORKERS,
+                   metavar="N")
+    p.add_argument("--booking-workers",
+                   type=int, default=DEFAULT_BOOKING_WORKERS,
+                   metavar="N")
+    p.add_argument("--patient-count",
+                   type=int, default=DEFAULT_PATIENT_COUNT,
+                   metavar="N")
+    p.add_argument("--cleanup",
+                   action="store_true",
+                   help="Delete [LOAD_TEST] records after run")
+    p.add_argument("--no-sweep",
+                   action="store_true",
+                   help="Skip the post-run integrity sweep")
+    p.add_argument("--log-file",
+                   default=None,
+                   metavar="PATH",
+                   help="Write a JSON-line request log to this path")
+    return p
 
-    token, providers, cfg_before = await bootstrap()
 
-    if "A" in scenarios:
-        await scenario_a(LOGIN_WORKERS)
+async def _async_main(args: argparse.Namespace) -> int:
+    global _log_fh
 
-    if "B" in scenarios:
-        await scenario_b(token, providers, BOOKING_WORKERS)
+    scenarios = {s.strip().upper() for s in args.scenarios.split(",") if s.strip()}
 
-    if "C" in scenarios:
-        await scenario_c(token, PATIENT_COUNT)
+    if args.log_file:
+        _log_fh = open(args.log_file, "w", encoding="utf-8")  # noqa: WPS515
 
-    if "D" in scenarios:
-        await scenario_d(token, providers, SOAK_DURATION, CONCURRENCY)
+    W = 64
+    print("═" * W)
+    print("  DENTAL AI STRESS TEST HARNESS")
+    print(f"  Target    : {args.base_url}")
+    print(f"  Scenarios : {', '.join(sorted(scenarios)) or '(none — cleanup only)'}")
+    print(f"  Race date : {RACE_DATE}  phone-seed={LT_PHONE_SEED}")
+    print(f"  Started   : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("═" * W)
 
-    await integrity_sweep(token, providers, cfg_before)
+    async with _make_client(args.base_url.rstrip("/")) as client:
 
-    if do_cleanup:
-        await cleanup(token)
+        # ── Bootstrap: obtain admin token ─────────────────────────────────────
+        print("\n[INIT] Authenticating …", flush=True)
+        token = await _login(client)
+        if not token:
+            print(
+                "FATAL: login failed — check credentials and --base-url",
+                file=sys.stderr,
+            )
+            return 1
+        print("[INIT] Token obtained ✓", flush=True)
 
+        # Capture config before any mutations for the settings-immutability check
+        initial_config: dict = {}
+        if not args.no_sweep:
+            _, initial_config = await req(
+                client, "GET", f"/api/practice/{PRACTICE_ID}/config",
+                "init/config", token=token,
+            )
+            if not isinstance(initial_config, dict):
+                initial_config = {}
+
+        t0 = time.monotonic()
+
+        # ── Scenarios ─────────────────────────────────────────────────────────
+        if "A" in scenarios:
+            await scenario_a(client, args.login_workers)
+
+        if "B" in scenarios:
+            await scenario_b(client, args.booking_workers, token)
+
+        if "C" in scenarios:
+            await scenario_c(client, args.patient_count, token)
+
+        if "D" in scenarios:
+            await scenario_d(client, args.concurrency, args.duration, token)
+
+        elapsed = time.monotonic() - t0
+        if scenarios:
+            print(f"\n[RUN] Scenarios complete in {elapsed:.1f}s")
+
+        # ── Post-run integrity sweep ───────────────────────────────────────────
+        if not args.no_sweep:
+            await integrity_sweep(client, token, initial_config)
+
+        # ── Cleanup ───────────────────────────────────────────────────────────
+        if args.cleanup:
+            await cleanup(client, token)
+
+    # ── Final output ──────────────────────────────────────────────────────────
     METRICS.print_summary()
 
-    width = 70
-    print("\n" + "═" * width)
-    if VIOLATIONS:
-        print(f"  ⚠  {len(VIOLATIONS)} INVARIANT VIOLATION(S) DETECTED:")
-        for v in VIOLATIONS:
-            print(f"     {v}")
-    else:
-        print("  ✓  All invariants passed — no violations detected.")
-    print("═" * width + "\n")
+    if _log_fh is not None:
+        _log_fh.close()
+        print(f"  JSON request log: {args.log_file}")
 
-    sys.exit(1 if VIOLATIONS else 0)
+    print(_README)
+
+    return 1 if METRICS.violations else 0
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# CLI
-# ═══════════════════════════════════════════════════════════════════════════════
+def main() -> None:
+    args = _build_parser().parse_args()
+    sys.exit(asyncio.run(_async_main(args)))
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Dental AI hard stress test",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__,
-    )
-    parser.add_argument("--scenarios",        default="A,B,C,D",
-                        help="Comma-separated: A,B,C,D  (default: all)")
-    parser.add_argument("--base-url",         default=None,
-                        help="Override BASE_URL")
-    parser.add_argument("--concurrency",      type=int, default=None,
-                        help="Concurrent workers (Scenario D + C lookups)")
-    parser.add_argument("--duration",         type=int, default=None,
-                        help="Soak duration in seconds (Scenario D)")
-    parser.add_argument("--login-workers",    type=int, default=None,
-                        help="Login storm workers (Scenario A)")
-    parser.add_argument("--booking-workers",  type=int, default=None,
-                        help="Booking race workers (Scenario B)")
-    parser.add_argument("--patient-count",    type=int, default=None,
-                        help="Patients to create (Scenario C)")
-    parser.add_argument("--cleanup",          action="store_true",
-                        help="Delete all LOAD_TEST-tagged data after the run")
-    args = parser.parse_args()
-
-    if args.base_url:      BASE_URL        = args.base_url
-    if args.concurrency:   CONCURRENCY     = args.concurrency
-    if args.duration:      SOAK_DURATION   = args.duration
-    if args.login_workers: LOGIN_WORKERS   = args.login_workers
-    if args.booking_workers: BOOKING_WORKERS = args.booking_workers
-    if args.patient_count: PATIENT_COUNT   = args.patient_count
-
-    scenarios = [s.strip().upper() for s in args.scenarios.split(",")]
-    asyncio.run(main(scenarios, args.cleanup))
+    main()
