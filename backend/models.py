@@ -106,13 +106,13 @@ class User(BaseModel):
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 class UserRegister(BaseModel):
-    email: EmailStr
+    email: str
     password: str
     full_name: str
     practice_name: str  # creates a new practice
 
 class UserLogin(BaseModel):
-    email: EmailStr
+    email: str
     password: str
 
 class UserInvite(BaseModel):
