@@ -1,0 +1,35 @@
+# Python
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+
+# Node
+node_modules/
+
+# Git
+.git/
+
+# Secrets — never bake into the image
+.env
+.env.*
+
+# Dev-only directories
+tests/
+scripts/
+
+# Build artifacts
+dist/
+build/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

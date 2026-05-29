@@ -1,0 +1,107 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: dental-ai-backend
+  labels:
+    cloud.googleapis.com/location: us-west1
+  annotations:
+    run.googleapis.com/ingress: all
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "20"
+        run.googleapis.com/cpu-throttling: "false"
+        run.googleapis.com/startup-cpu-boost: "true"
+    spec:
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      serviceAccountName: 244697312574-compute@developer.gserviceaccount.com
+      containers:
+      - image: gcr.io/dental-ai-backend/dental-ai-backend
+        ports:
+        - name: http1
+          containerPort: 8080
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 512Mi
+        env:
+        # Non-sensitive config
+        - name: DATABASE_NAME
+          value: dental_ai
+        - name: CORS_ORIGINS
+          value: "https://frontdeskdentalai.com,https://www.frontdeskdentalai.com,https://dental-ai-frontend.pages.dev"
+        - name: LLM_DEFAULT_PROVIDER
+          value: openai
+        - name: LLM_DEFAULT_MODEL
+          value: gpt-4o-mini
+        - name: LLM_ESCALATION_PROVIDER
+          value: anthropic
+        - name: LLM_ESCALATION_MODEL
+          value: claude-3-7-sonnet
+        - name: LLM_RULES_PATH
+          value: llm/llm_rules.json
+        - name: LLM_PRICING_PATH
+          value: llm/llm_pricing.json
+        - name: OPENAI_TEXT_MODEL
+          value: gpt-4o-mini
+        - name: OPENAI_JSON_MODEL
+          value: gpt-4o-mini
+        - name: GROQ_TEXT_MODEL
+          value: llama3-70b-8192
+        - name: GROQ_JSON_MODEL
+          value: llama3-70b-8192
+        - name: STRIPE_PRICE_BASIC
+          value: price_1TRmO0I19hnYua8lR4AFGh7G
+        - name: STRIPE_PRICE_PROFESSIONAL
+          value: price_1TRmOYI19hnYua8ltCuqyFR1
+        - name: STRIPE_PRICE_ENTERPRISE
+          value: price_1TRmOqI19hnYua8lG4wPfahM
+        - name: STRIPE_PRICE_ELITE
+          value: price_1TRmvcI19hnYua8lfrBiO6Kd
+        # Secrets from GCP Secret Manager (created by deploy_backend.ps1)
+        - name: MONGODB_URI
+          valueFrom:
+            secretKeyRef:
+              name: MONGODB_URI
+              key: latest
+        - name: JWT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: JWT_SECRET_KEY
+              key: latest
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: OPENAI_API_KEY
+              key: latest
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ANTHROPIC_API_KEY
+              key: latest
+        - name: GROQ_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: GROQ_API_KEY
+              key: latest
+        - name: RETELL_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: RETELL_API_KEY
+              key: latest
+        - name: STRIPE_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: STRIPE_SECRET_KEY
+              key: latest
+        - name: STRIPE_WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: STRIPE_WEBHOOK_SECRET
+              key: latest
+  traffic:
+  - percent: 100
+    latestRevision: true
