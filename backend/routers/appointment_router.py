@@ -3,11 +3,24 @@ import uuid
 from datetime import datetime, timezone
 import logging
 
+from pymongo.errors import DuplicateKeyError as MongoDuplicateKeyError
+
 from models import AppointmentCreate
 from auth import get_db, get_current_user, require_role, log_audit_event, log_analytics_event, detect_emergency
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["appointments"])
+
+
+def _booking_key(practice_id: str, provider_id: str, date: str, time: str) -> str:
+    """Slot-lock key stored on active appointments.
+
+    A unique sparse index on this field (see scripts/add_booking_key_index.py)
+    makes the conflict check atomic at the storage layer: two concurrent
+    inserts with the same key cannot both succeed — only one gets written,
+    the other raises MongoDuplicateKeyError which we map to HTTP 409.
+    """
+    return f"{practice_id}|{provider_id}|{date}|{time}"
 
 
 @router.get("/appointments")
@@ -92,7 +105,22 @@ async def create_appointment(apt: AppointmentCreate, current_user: dict = Depend
         "is_emergency": is_emergency,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    await db.appointments.insert_one(doc)
+
+    # Set the slot-lock key so the unique sparse index prevents concurrent
+    # double-inserts even when check_provider_conflicts races.
+    if apt.provider_id and practice_id:
+        doc["booking_key"] = _booking_key(
+            practice_id, apt.provider_id,
+            apt.appointment_date, apt.appointment_time,
+        )
+
+    try:
+        await db.appointments.insert_one(doc)
+    except MongoDuplicateKeyError:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Provider {provider_name or apt.provider_id} is already booked at {apt.appointment_time}",
+        )
 
     await log_audit_event(current_user["id"], practice_id, "appointment_created", "appointment", doc["id"],
                           {"patient_name": apt.patient_name, "date": apt.appointment_date, "emergency": is_emergency})
@@ -111,10 +139,40 @@ async def update_appointment(appointment_id: str, request: Request, current_user
     update = {k: v for k, v in body.items() if k in allowed and v is not None}
     if not update:
         raise HTTPException(status_code=400, detail="No update data")
-    result = await db.appointments.update_one(
-        {"id": appointment_id, "practice_id": current_user.get("practice_id")},
-        {"$set": update}
-    )
+
+    practice_id = current_user.get("practice_id")
+    mongo_op: dict = {"$set": update}
+
+    cancelling   = update.get("status") in ("cancelled", "no_show")
+    rescheduling = any(k in update for k in ("appointment_date", "appointment_time", "provider_id"))
+
+    if cancelling:
+        # Free the slot so it can be booked again.
+        mongo_op["$unset"] = {"booking_key": ""}
+
+    elif rescheduling and practice_id:
+        # Fetch the current doc to fill in any scheduling fields not present in
+        # the update (e.g. only the date is changing, not the time or provider).
+        current = await db.appointments.find_one(
+            {"id": appointment_id, "practice_id": practice_id},
+            {"_id": 0, "provider_id": 1, "appointment_date": 1,
+             "appointment_time": 1, "status": 1},
+        )
+        if current and current.get("provider_id") and current.get("status") not in ("cancelled", "no_show"):
+            eff_provider = update.get("provider_id",        current["provider_id"])
+            eff_date     = update.get("appointment_date",   current["appointment_date"])
+            eff_time     = update.get("appointment_time",   current["appointment_time"])
+            update["booking_key"] = _booking_key(practice_id, eff_provider, eff_date, eff_time)
+            # mongo_op["$set"] already references `update` by reference — no re-assign needed
+
+    try:
+        result = await db.appointments.update_one(
+            {"id": appointment_id, "practice_id": practice_id},
+            mongo_op,
+        )
+    except MongoDuplicateKeyError:
+        raise HTTPException(status_code=409, detail="That time slot is already booked for this provider")
+
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Appointment not found")
     return {"status": "success"}
@@ -126,7 +184,9 @@ async def cancel_appointment(appointment_id: str, current_user: dict = Depends(r
     db = get_db()
     result = await db.appointments.update_one(
         {"id": appointment_id, "practice_id": current_user.get("practice_id")},
-        {"$set": {"status": "cancelled"}}
+        # Unset booking_key so the unique index releases the slot immediately,
+        # allowing a new appointment to be booked for the same provider+time.
+        {"$set": {"status": "cancelled"}, "$unset": {"booking_key": ""}},
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Appointment not found")
