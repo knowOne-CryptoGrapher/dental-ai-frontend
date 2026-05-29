@@ -830,7 +830,10 @@ async def integrity_sweep(
             METRICS.violation(
                 f"[SWEEP] Appointment {a.get('id')} → unknown patient_id={pid}"
             )
-        if pvid and pvid not in provider_ids:
+        # SEED_PROVIDERS were created by init_db.py without is_active=True,
+        # so GET /api/providers (filters is_active: True) returns 0 for them.
+        # They are valid references — whitelist them the same way as SEED_PATIENT_IDS.
+        if pvid and pvid not in provider_ids and pvid not in set(SEED_PROVIDERS):
             METRICS.violation(
                 f"[SWEEP] Appointment {a.get('id')} → unknown provider_id={pvid}"
             )
@@ -1107,6 +1110,11 @@ async def _async_main(args: argparse.Namespace) -> int:
 
 
 def main() -> None:
+    # Windows consoles default to cp1252; reconfigure to UTF-8 so box-drawing
+    # characters and tick marks render correctly in any terminal.
+    if sys.platform == "win32":
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
     args = _build_parser().parse_args()
     sys.exit(asyncio.run(_async_main(args)))
 
