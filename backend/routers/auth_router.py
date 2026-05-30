@@ -9,6 +9,7 @@ from auth import (
     get_current_user, require_role, log_audit_event, log_security_event,
 )
 from plans import enforce_plan_limit
+from utils.rate_limiter import limiter
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -107,7 +108,8 @@ async def register(data: UserRegister):
 
 
 @router.post("/login")
-async def login(creds: UserLogin, request: Request):
+@limiter.limit("5/15minutes")
+async def login(request: Request, creds: UserLogin):
     try:
         db = get_db()
         ip = request.client.host if request.client else None

@@ -34,5 +34,8 @@ python-dotenv==1.2.2
 # Structured logging (JSON output for Cloud Logging)
 python-json-logger==2.0.7
 
+# Rate limiting
+slowapi==0.1.9
+
 # Testing
 pytest>=8.0.0

@@ -4,18 +4,20 @@ import uuid
 import json
 import logging
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorClient
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
 
 # -------------------------------------------------------------------
 # Structured logging — must be configured before any other imports
 # that call logging.getLogger().
 # -------------------------------------------------------------------
 from utils.logging_config import configure_logging
+from utils.rate_limiter import limiter
 configure_logging()
 
 logger = logging.getLogger(__name__)
@@ -79,6 +81,36 @@ app = FastAPI(
     version="2.0.0",
     description="Backend API for FrontDesk Dental AI",
 )
+
+app.state.limiter = limiter
+
+
+async def _on_rate_limit_exceeded(request: Request, exc: RateLimitExceeded):
+    from auth import log_security_event
+    from utils.rate_limiter import _get_real_ip
+    ip = _get_real_ip(request)
+    logger.warning(
+        "rate_limit_exceeded",
+        extra={"ip": ip, "path": request.url.path, "limit": str(exc.detail)},
+    )
+    # Fire-and-forget security event — don't let DB errors break the 429 response
+    import asyncio
+    asyncio.ensure_future(
+        log_security_event(
+            event_type="rate_limit_exceeded",
+            ip_address=ip,
+            details={"path": request.url.path, "limit": str(exc.detail)},
+        )
+    )
+    retry_after = getattr(exc, "retry_after", 60)
+    return JSONResponse(
+        status_code=429,
+        content={"error": "Too many requests", "detail": str(exc.detail)},
+        headers={"Retry-After": str(retry_after)},
+    )
+
+
+app.add_exception_handler(RateLimitExceeded, _on_rate_limit_exceeded)
 
 # -------------------------------------------------------------------
 # Request Logging Middleware

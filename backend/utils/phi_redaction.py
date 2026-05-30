@@ -10,27 +10,39 @@ Fields treated as PHI (case-insensitive key match):
   - email / patient_email
   - date_of_birth / dob
   - insurance_policy_number / policy_number / insurance_group_number / group_number
-  - health_card_number
+  - health_card_number / health_card
   - emergency_contact_name / emergency_contact_phone
   - transcript   -- AI call transcripts always contain PHI
   - notes        -- clinical free-text
-  - address / street
+  - address / street / street_address / postal_code / city
+  - sin          -- Social Insurance Number (PIPEDA)
+  - member_id    -- Insurance member ID
 """
 import re
 from typing import Any
 
 _PHI_FIELDS = frozenset({
+    # Identity
     "name", "patient_name", "first_name", "last_name", "full_name", "customer_name",
+    # Contact
     "phone", "patient_phone", "phone_number", "from_number", "to_number",
     "email", "patient_email",
+    # Dates
     "date_of_birth", "dob",
+    # Insurance / government IDs
     "insurance_policy_number", "policy_number",
     "insurance_group_number", "group_number",
-    "health_card_number",
+    "health_card_number", "health_card",
+    "member_id",
+    # Canadian-specific (PIPEDA indirect identifiers)
+    "sin",              # Social Insurance Number
+    # Emergency contacts
     "emergency_contact_name", "emergency_contact_phone",
+    # Free-text PHI
     "transcript",
     "notes",
-    "address", "street",
+    # Address fields — indirect identifiers under PIPEDA when combined with other data
+    "address", "street", "street_address", "postal_code", "city",
 })
 
 _MASK = "[REDACTED]"
