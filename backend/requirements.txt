@@ -31,5 +31,8 @@ stripe==15.1.0
 # Config
 python-dotenv==1.2.2
 
+# Structured logging (JSON output for Cloud Logging)
+python-json-logger==2.0.7
+
 # Testing
 pytest>=8.0.0

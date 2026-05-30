@@ -10,6 +10,7 @@ import hmac
 import hashlib
 
 from auth import get_db
+from utils.phi_redaction import mask_phone
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/retell", tags=["retell_public_api"])
@@ -51,8 +52,8 @@ async def _parse_retell_body(request: Request) -> dict:
         llm_phone = args.get("phone_number") or args.get("patient_phone")
         if llm_phone and llm_phone != from_number:
             logger.info(
-                f"🔧 Overriding LLM phone {llm_phone!r} with real caller "
-                f"from_number {from_number!r}"
+                "retell_phone_override",
+                extra={"llm_phone": mask_phone(llm_phone), "caller_phone": mask_phone(from_number)},
             )
         args["phone_number"] = from_number
         args["patient_phone"] = from_number
@@ -446,7 +447,7 @@ async def lookup_patient_by_phone(
             detail="practice_id and phone_number are required"
         )
     
-    logger.info(f"🔍 Retell patient lookup: {phone_number} for practice {practice_id}")
+    logger.info("retell_patient_lookup", extra={"phone": mask_phone(phone_number), "practice_id": practice_id})
     
     db = get_db()
     
@@ -467,7 +468,7 @@ async def lookup_patient_by_phone(
     )
     
     if not patient:
-        logger.info(f"❌ No patient found with phone {phone_number}")
+        logger.info("retell_patient_not_found", extra={"phone": mask_phone(phone_number)})
         return {
             "found": False,
             "patient": None,
@@ -483,7 +484,7 @@ async def lookup_patient_by_phone(
             "message": "I don't see an existing account with this number. I'll create a new patient record for you."
         }
     
-    logger.info(f"✅ Found patient: {patient.get('name')} (ID: {patient.get('id')})")
+    logger.info("retell_patient_found", extra={"patient_id": patient.get("id")})
     
     # Get appointment history
     patient_id = patient.get("id")
@@ -623,7 +624,7 @@ async def register_patient_realtime(
             detail="practice_id, patient_phone, and patient_name are required"
         )
 
-    logger.info(f"📝 Retell register_patient: {patient_name} ({patient_phone})")
+    logger.info("retell_register_patient", extra={"phone": mask_phone(patient_phone)})
 
     db = get_db()
     from uuid import uuid4
@@ -635,7 +636,7 @@ async def register_patient_realtime(
         {"_id": 0}
     )
     if existing:
-        logger.info(f"✓ Patient already exists: {existing.get('name')} (id={existing.get('id')})")
+        logger.info("retell_register_patient_exists", extra={"patient_id": existing.get("id")})
         return {
             "success": True,
             "already_existed": True,
@@ -670,7 +671,7 @@ async def register_patient_realtime(
         "created_at": now_iso,
     }
     await db.patients.insert_one(patient_doc)
-    logger.info(f"✅ Created new patient via register: {patient_name} (id={patient_id})")
+    logger.info("retell_register_patient_created", extra={"patient_id": patient_id})
 
     first_name = patient_name.split(" ", 1)[0]
     return {
@@ -770,7 +771,7 @@ async def book_appointment_realtime(
     except ValueError:
         pass
 
-    logger.info(f"📅 Retell booking appointment: {patient_name} on {appointment_date} at {appointment_time}")
+    logger.info("retell_book_appointment", extra={"phone": mask_phone(patient_phone), "date": appointment_date})
     
     db = get_db()
     from uuid import uuid4
@@ -794,10 +795,10 @@ async def book_appointment_realtime(
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         await db.patients.insert_one(patient_doc)
-        logger.info(f"✅ Created new patient: {patient_name} (ID: {patient_id})")
+        logger.info("retell_booking_patient_created", extra={"patient_id": patient_id})
     else:
         patient_id = patient.get("id")
-        logger.info(f"✅ Found existing patient: {patient_name} (ID: {patient_id})")
+        logger.info("retell_booking_patient_found", extra={"patient_id": patient_id})
     
     # Match provider if specified
     provider_id = None
@@ -852,7 +853,7 @@ async def book_appointment_realtime(
     provider_text = f" with {matched_provider_name}" if matched_provider_name else ""
     message = f"Appointment booked successfully for {friendly_date} at {appointment_time}{provider_text}."
     
-    logger.info(f"✅ Appointment created: {appointment_id} for {patient_name}")
+    logger.info("retell_appointment_created", extra={"appointment_id": appointment_id, "patient_id": patient_id})
     
     return {
         "success": True,

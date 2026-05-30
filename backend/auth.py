@@ -9,6 +9,14 @@ import bcrypt
 
 logger = logging.getLogger(__name__)
 
+# ---- JWT field requirements ------------------------------------------------
+# All newly issued tokens must include: sub, practice_id, role, exp.
+# get_current_user always re-fetches the user from DB (authoritative), so
+# practice_id and role in the JWT are used for future stateless validation and
+# audit trail; they are NOT trusted for access control.
+_REQUIRED_JWT_FIELDS = ("sub",)  # hard-reject if missing
+_EXPECTED_JWT_FIELDS = ("practice_id", "role")  # warn if missing (grace period)
+
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dental-ai-enterprise-secret-2025")
 ALGORITHM = "HS256"
 security = HTTPBearer()
@@ -24,7 +32,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def create_access_token(data: dict, expires_delta: timedelta = timedelta(days=7)) -> str:
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + expires_delta
-    to_encode.update({"exp": expire})
+    to_encode["exp"] = expire
+    for field in _EXPECTED_JWT_FIELDS:
+        if field not in to_encode:
+            logger.warning("JWT issued without required field", extra={"missing_field": field})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 # ==== DB REFERENCE (set from server.py) ====
@@ -43,19 +54,30 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     try:
         token = credentials.credentials
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+
         user_id: str = payload.get("sub")
-        if user_id is None:
+        if not user_id:
             raise HTTPException(status_code=401, detail="Invalid credentials")
-        
+
         db = get_db()
         user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
         if user is None:
             raise HTTPException(status_code=401, detail="User not found")
-        # Carry impersonation context from the JWT into the user dict so
-        # downstream code (and /auth/me) can surface it to the UI.
+        if not user.get("is_active", True):
+            raise HTTPException(status_code=403, detail="Account disabled")
+
+        # Carry impersonation context from the JWT so /auth/me can surface it.
         if payload.get("impersonated_by"):
-            user["impersonated_by"] = payload.get("impersonated_by")
+            user["impersonated_by"] = payload["impersonated_by"]
             user["impersonator_email"] = payload.get("impersonator_email")
+
+        # Warn if this token was issued before we started including these fields.
+        for field in _EXPECTED_JWT_FIELDS:
+            if field not in payload:
+                logger.warning(
+                    "Token missing expected claim — re-login will fix this",
+                    extra={"missing_claim": field, "user_id": user_id},
+                )
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
@@ -88,6 +110,72 @@ def require_practice_access(current_user: dict, practice_id: str):
     if current_user.get("practice_id") != practice_id:
         raise HTTPException(status_code=403, detail="Access denied to this practice")
     return True
+
+
+def require_practice_scope():
+    """
+    FastAPI dependency that enforces a non-null practice_id on the caller.
+
+    Super-admins are exempt (they manage multiple practices).
+    Use this on any endpoint that must be scoped to a single practice:
+
+        async def my_endpoint(current_user: dict = Depends(require_practice_scope())):
+            practice_id = current_user["practice_id"]
+    """
+    async def _check(current_user: dict = Depends(get_current_user)) -> dict:
+        if not current_user.get("practice_id") and current_user.get("role") != "super_admin":
+            logger.warning(
+                "Request rejected — no practice scope",
+                extra={"user_id": current_user.get("id"), "role": current_user.get("role")},
+            )
+            raise HTTPException(status_code=403, detail="Practice scope required")
+        return current_user
+    return _check
+
+# ==== SECURITY EVENT LOGGING ====
+
+async def log_security_event(
+    event_type: str,
+    user_id: str | None = None,
+    practice_id: str | None = None,
+    ip_address: str | None = None,
+    details: dict | None = None,
+) -> None:
+    """
+    Write a security event to the `security_events` collection and emit a
+    structured WARNING log so Cloud Logging can alert on patterns.
+
+    event_type examples: login_failed, forbidden_access, cross_practice_attempt,
+                         repeated_401, account_disabled_access
+    """
+    entry = {
+        "id": str(uuid.uuid4()),
+        "event_category": "security",
+        "event_type": event_type,
+        "user_id": user_id,
+        "practice_id": practice_id,
+        "ip_address": ip_address,
+        "details": details or {},
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        db = get_db()
+        if db is not None:
+            await db.security_events.insert_one(entry)
+    except Exception as exc:
+        logger.error("Failed to persist security event", extra={"error": str(exc)})
+
+    logger.warning(
+        "security_event",
+        extra={
+            "event_category": "security",
+            "event_type": event_type,
+            "user_id": user_id,
+            "practice_id": practice_id,
+            "ip_address": ip_address,
+        },
+    )
+
 
 # ==== AUDIT HELPER ====
 

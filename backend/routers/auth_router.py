@@ -6,7 +6,7 @@ import logging
 from models import UserRegister, UserLogin, UserInvite, PracticeCreate
 from auth import (
     get_db, hash_password, verify_password, create_access_token,
-    get_current_user, require_role, log_audit_event
+    get_current_user, require_role, log_audit_event, log_security_event,
 )
 from plans import enforce_plan_limit
 
@@ -92,32 +92,54 @@ async def register(data: UserRegister):
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
 
-        token = create_access_token(data={"sub": user_id})
+        token = create_access_token(data={
+            "sub": user_id,
+            "practice_id": practice_id,
+            "role": "admin",
+        })
         return {"access_token": token, "token_type": "bearer", "user": _user_response(user_doc)}
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Register error: {e}")
+        logger.error("register_error", extra={"error": str(e)})
         raise HTTPException(status_code=500, detail="Registration failed")
 
 
 @router.post("/login")
-async def login(creds: UserLogin):
+async def login(creds: UserLogin, request: Request):
     try:
         db = get_db()
+        ip = request.client.host if request.client else None
         user = await db.users.find_one({"email": creds.email}, {"_id": 0})
+
         if not user or not verify_password(creds.password, user["password_hash"]):
+            await log_security_event(
+                "login_failed",
+                ip_address=ip,
+                details={"email_domain": creds.email.split("@")[-1]},
+            )
             raise HTTPException(status_code=401, detail="Invalid email or password")
+
         if not user.get("is_active", True):
+            await log_security_event(
+                "login_disabled_account",
+                user_id=user["id"],
+                practice_id=user.get("practice_id"),
+                ip_address=ip,
+            )
             raise HTTPException(status_code=403, detail="Account disabled")
 
-        token = create_access_token(data={"sub": user["id"]})
+        token = create_access_token(data={
+            "sub": user["id"],
+            "practice_id": user.get("practice_id"),
+            "role": user.get("role", "staff"),
+        })
         return {"access_token": token, "token_type": "bearer", "user": _user_response(user)}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Login error: {e}")
+        logger.error("login_error", extra={"error": str(e)})
         raise HTTPException(status_code=500, detail="Login failed")
 
 

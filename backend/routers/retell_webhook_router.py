@@ -105,7 +105,15 @@ async def process_retell_webhook(payload: dict, override_practice_id: str | None
     and used regardless of what the body metadata says. Otherwise we fall back
     to body metadata → dynamic vars → first-practice-in-DB (legacy behavior).
     """
-    logger.info(f"Full webhook payload: {payload}")
+    # Intentionally NOT logging the full payload — it contains transcripts (PHI).
+    logger.info(
+        "retell_webhook_received",
+        extra={
+            "event_type": payload.get("event"),
+            "call_id": (payload.get("call") or {}).get("call_id"),
+            "override_practice_id": override_practice_id,
+        },
+    )
     try:
         event_type = payload.get("event")
         call_data = payload.get("call", {})
@@ -239,17 +247,17 @@ async def handle_call_analyzed(call_data: dict, practice_id: str):
                 f"✅ Extracted preferred provider from transcript: {preferred_provider_name}"
             )
 
-    # Debug logging — which nested location holds the extracted data
-    logger.info(f"🔍 DEEP ANALYSIS for call {call_id}")
-    logger.info(f"📋 Top-level keys in call_data: {list(call_data.keys())}")
     dynamic_vars = call_data.get("retell_llm_dynamic_variables", {})
     call_analysis = call_data.get("call_analysis", {})
-    custom_data = call_data.get("custom_analysis_data", {})
-    llm_response = call_data.get("llm_response", {})
-    logger.info(f"🔹 retell_llm_dynamic_variables keys: {list(dynamic_vars.keys())}")
-    logger.info(f"🔹 call_analysis type: {type(call_analysis)}, content: {call_analysis}")
-    logger.info(f"🔹 custom_analysis_data: {custom_data}")
-    logger.info(f"🔹 llm_response: {llm_response}")
+    # Log only structural keys, not values — values may contain PHI.
+    logger.info(
+        "retell_call_analysis_keys",
+        extra={
+            "call_id": call_id,
+            "top_level_keys": list(call_data.keys()),
+            "dynamic_var_keys": list(dynamic_vars.keys()),
+        },
+    )
 
     # ---- Emergency keyword detection ----
     emergency_patterns = {
@@ -334,7 +342,7 @@ async def handle_call_analyzed(call_data: dict, practice_id: str):
                 {"practice_id": practice_id, "call_id": call_id},
                 {"$set": {"patient_id": patient_id, "patient_name": existing.get("name")}},
             )
-            logger.info(f"Linked call {call_id} to existing patient {patient_id}")
+            logger.info("call_linked_to_patient", extra={"call_id": call_id, "patient_id": patient_id})
         else:
             patient_name, extracted_reason, extracted_email = _extract_caller_details(
                 call_data, transcript, dynamic_vars, call_analysis
@@ -344,9 +352,7 @@ async def handle_call_analyzed(call_data: dict, practice_id: str):
                 logger.info(f"✅ Using extracted reason: {reason}")
             if not patient_name:
                 patient_name = f"Caller {from_number[-4:]}"
-                logger.warning(
-                    f"⚠️ No name extracted for {call_id}, using placeholder: {patient_name}"
-                )
+                logger.warning("no_name_extracted", extra={"call_id": call_id})
 
             patient_id = str(uuid4())
             name_parts = patient_name.split(maxsplit=1)
@@ -372,7 +378,8 @@ async def handle_call_analyzed(call_data: dict, practice_id: str):
                 {"$set": {"patient_id": patient_id, "patient_name": patient_name}},
             )
             logger.info(
-                f"Auto-created patient: {patient_name} ({from_number}) from call {call_id}"
+                "patient_auto_created",
+                extra={"call_id": call_id, "patient_id": patient_id},
             )
 
     # ---- Auto-create appointment on booking intent ----
@@ -429,11 +436,15 @@ async def handle_call_analyzed(call_data: dict, practice_id: str):
                 {"$set": {"appointment_id": appointment_id}},
             )
 
-            provider_info = f"with {provider_name}" if provider_name else "(unassigned provider)"
             logger.info(
-                f"Auto-created appointment {appointment_id} for patient "
-                f"{patient_name_for_apt} ({patient_id}) on {appointment_date} "
-                f"at {extracted_time} {provider_info}"
+                "appointment_auto_created",
+                extra={
+                    "call_id": call_id,
+                    "appointment_id": appointment_id,
+                    "patient_id": patient_id,
+                    "date": appointment_date,
+                    "provider_id": provider_id,
+                },
             )
 
 
@@ -473,31 +484,31 @@ def _extract_caller_details(
             for f in name_fields:
                 if loc.get(f):
                     patient_name = str(loc[f]).strip()
-                    logger.info(f"✅ Extracted patient_name from {f}: {patient_name}")
+                    logger.info("caller_name_extracted", extra={"source_field": f})
                     break
         if not extracted_reason:
             for f in reason_fields:
                 if loc.get(f):
                     extracted_reason = str(loc[f]).strip()
-                    logger.info(f"✅ Extracted call_reason from {f}: {extracted_reason}")
+                    logger.info("call_reason_extracted", extra={"source_field": f})
                     break
         if not extracted_email:
             for f in email_fields:
                 if loc.get(f):
                     extracted_email = str(loc[f]).strip()
-                    logger.info(f"✅ Extracted email from {f}: {extracted_email}")
+                    logger.info("caller_email_extracted", extra={"source_field": f})
                     break
 
     # Fall back to smart extraction from transcript
     if not patient_name and transcript:
-        logger.info("⚠️ Retell extraction failed, attempting smart extraction from transcript")
+        logger.info("smart_extraction_fallback")
         from utils.transcript_parser import smart_extract
         smart = smart_extract(transcript, call_data)
         patient_name = smart.get("patient_name")
         extracted_reason = extracted_reason or smart.get("call_reason")
         extracted_email = extracted_email or smart.get("patient_email")
         if patient_name:
-            logger.info(f"✅ Smart extraction found name: {patient_name}")
+            logger.info("smart_extraction_found_name")
 
     return patient_name, extracted_reason, extracted_email
 

@@ -1,21 +1,33 @@
 import os
+import time
+import uuid
 import json
+import logging
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorClient
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 
 # -------------------------------------------------------------------
-# Load Environment Variables (bulletproof)
+# Structured logging — must be configured before any other imports
+# that call logging.getLogger().
 # -------------------------------------------------------------------
+from utils.logging_config import configure_logging
+configure_logging()
 
-# Load .env from the backend folder (same method that worked in your test)
+logger = logging.getLogger(__name__)
+
+# -------------------------------------------------------------------
+# Load Environment Variables
+# -------------------------------------------------------------------
 load_dotenv(".env", override=True)
 
 # -------------------------------------------------------------------
 # Router Imports
 # -------------------------------------------------------------------
-
 from routers.auth_router import router as auth_router
 from routers.billing_router import router as billing_router
 from routers.stripe_webhook_router import router as stripe_webhook_router
@@ -23,7 +35,6 @@ from routers.onboarding_router import router as onboarding_router
 from routers.retell_router import router as retell_router
 from routers.llm_router_api import router as llm_router
 
-# Additional routers
 from routers.analytics_router import router as analytics_router
 from routers.appointment_router import router as appointment_router
 from routers.calllog_router import router as calllog_router
@@ -38,18 +49,17 @@ from routers.retell_webhook_router import router as retell_webhook_router
 # -------------------------------------------------------------------
 # LLM Manager Initialization
 # -------------------------------------------------------------------
-
 from services.llm_manager import LLMManager
 from auth import set_db
 
 def load_json_file(path: str):
     if not path or not os.path.exists(path):
-        print(f"[WARN] JSON file not found: {path}")
+        logger.warning("JSON config file not found", extra={"path": path})
         return {}
     with open(path, "r") as f:
         return json.load(f)
 
-LLM_RULES = load_json_file(os.getenv("LLM_RULES_PATH"))
+LLM_RULES   = load_json_file(os.getenv("LLM_RULES_PATH"))
 LLM_PRICING = load_json_file(os.getenv("LLM_PRICING_PATH"))
 
 llm_manager = LLMManager(
@@ -58,18 +68,73 @@ llm_manager = LLMManager(
     escalation_provider=os.getenv("LLM_ESCALATION_PROVIDER"),
     escalation_model=os.getenv("LLM_ESCALATION_MODEL"),
     rules=LLM_RULES,
-    pricing=LLM_PRICING
+    pricing=LLM_PRICING,
 )
 
 # -------------------------------------------------------------------
 # App Initialization
 # -------------------------------------------------------------------
-
 app = FastAPI(
     title="Dental AI Backend",
     version="2.0.0",
-    description="Backend API for FrontDesk Dental AI"
+    description="Backend API for FrontDesk Dental AI",
 )
+
+# -------------------------------------------------------------------
+# Request Logging Middleware
+# -------------------------------------------------------------------
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    """
+    Assigns a short request_id to every inbound request, logs method/path/
+    status/latency as structured JSON, and echoes the ID in the response
+    header so it can be correlated in Cloud Logging.
+
+    PHI is never logged here — only path, method, status, and latency.
+    """
+
+    _SKIP_PATHS = frozenset({"/health/live", "/health/ready", "/health"})
+
+    async def dispatch(self, request: Request, call_next):
+        request_id = str(uuid.uuid4())[:8]
+        request.state.request_id = request_id
+        start = time.monotonic()
+
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            if request.url.path not in self._SKIP_PATHS:
+                logger.error(
+                    "unhandled_request_error",
+                    extra={
+                        "request_id": request_id,
+                        "method": request.method,
+                        "path": request.url.path,
+                        "error": str(exc),
+                    },
+                    exc_info=True,
+                )
+            raise
+
+        latency_ms = round((time.monotonic() - start) * 1000, 2)
+
+        if request.url.path not in self._SKIP_PATHS:
+            logger.info(
+                "http_request",
+                extra={
+                    "request_id": request_id,
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status_code": response.status_code,
+                    "latency_ms": latency_ms,
+                },
+            )
+
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+
+app.add_middleware(RequestLoggingMiddleware)
 
 # -------------------------------------------------------------------
 # CORS Configuration
@@ -102,43 +167,74 @@ app.add_middleware(
 
 _mongo_client: AsyncIOMotorClient | None = None
 
+
 @app.on_event("startup")
 async def startup_event():
     global _mongo_client
-    print("🚀 Server starting...")
+
+    build_id  = os.getenv("BUILD_ID", "dev")
+    env_label = os.getenv("ENV", "production")
+    logger.info(
+        "server_starting",
+        extra={"build_id": build_id, "env": env_label, "version": "2.0.0"},
+    )
 
     mongo_uri = os.getenv("MONGODB_URI")
-    db_name = os.getenv("DATABASE_NAME", "dental_ai")
+    db_name   = os.getenv("DATABASE_NAME", "dental_ai")
     if not mongo_uri:
         raise RuntimeError("MONGODB_URI environment variable is not set")
+
     _mongo_client = AsyncIOMotorClient(mongo_uri)
     set_db(_mongo_client[db_name])
-    print(f"✅ MongoDB connected to '{db_name}'")
+    logger.info("mongodb_connected", extra={"db_name": db_name})
 
-    print("🔧 Initializing LLM router...")
     llm_manager.initialize()
-    print("✅ LLM router ready")
+    logger.info("llm_router_ready", extra={"status": llm_manager.status()})
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
     global _mongo_client
     if _mongo_client:
         _mongo_client.close()
-    print("🛑 Server shutting down...")
+    logger.info("server_shutdown")
 
 # -------------------------------------------------------------------
-# Health Check
+# Health Endpoints
 # -------------------------------------------------------------------
 
-@app.get("/health")
+
+@app.get("/health/live", tags=["health"])
+async def health_live():
+    """Liveness: returns 200 if the process is running."""
+    return {"status": "ok"}
+
+
+@app.get("/health/ready", tags=["health"])
+async def health_ready():
+    """
+    Readiness: verifies MongoDB connectivity before accepting traffic.
+    Cloud Run uses this to gate traffic during rolling deployments.
+    """
+    if _mongo_client is None:
+        raise HTTPException(status_code=503, detail="DB client not initialised")
+    try:
+        await _mongo_client.admin.command("ping")
+    except Exception as exc:
+        logger.error("health_ready_failed", extra={"error": str(exc)})
+        raise HTTPException(status_code=503, detail="DB unavailable")
+    return {"status": "ready", "db": "ok"}
+
+
+@app.get("/health", tags=["health"])
 async def health_check():
+    """Legacy health endpoint — preserved for backward compatibility."""
     return {"status": "ok", "llm_router": llm_manager.status()}
 
 # -------------------------------------------------------------------
 # Include Routers
 # -------------------------------------------------------------------
 
-# Core
 app.include_router(auth_router)
 app.include_router(billing_router)
 app.include_router(stripe_webhook_router)
@@ -146,7 +242,6 @@ app.include_router(onboarding_router)
 app.include_router(retell_router)
 app.include_router(llm_router)
 
-# Additional routers
 app.include_router(analytics_router)
 app.include_router(appointment_router)
 app.include_router(calllog_router)
@@ -162,9 +257,16 @@ app.include_router(retell_webhook_router)
 # Global Error Handler
 # -------------------------------------------------------------------
 
-@app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    print(f"[ERROR] {exc}")
-    return {"error": "Internal server error", "details": str(exc)}
 
-#force new commit
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    request_id = getattr(request.state, "request_id", "unknown")
+    logger.error(
+        "unhandled_exception",
+        extra={"request_id": request_id, "path": request.url.path, "error": str(exc)},
+        exc_info=True,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"error": "Internal server error"},
+    )

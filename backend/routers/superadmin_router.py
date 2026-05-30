@@ -461,6 +461,8 @@ async def impersonate_practice(
     token = create_access_token(
         data={
             "sub": target["id"],
+            "practice_id": practice_id,
+            "role": target.get("role", "admin"),
             "impersonated_by": current_user.get("id"),
             "impersonator_email": current_user.get("email"),
         },
