@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request, Header
 import uuid
 from datetime import datetime, timezone
 import logging
@@ -6,13 +6,56 @@ import logging
 import os
 from models import PracticeCreate, LocationCreate, ProviderCreate
 from auth import (
-    get_db, get_current_user, require_role, require_practice_access, log_audit_event
+    get_db, get_current_user, require_role, require_practice_access,
+    require_practice_scope, log_audit_event,
 )
 from plans import enforce_plan_limit
 from regions.region_config import derive_region, DB_CLUSTER_LABELS, COMPUTE_REGION_LABELS
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["practice"])
+
+# ── Internal router — used by the global router service only ──────────────────
+# Not exposed publicly. Authenticated with INTERNAL_API_KEY, not user JWT.
+
+_INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "")
+
+internal_router = APIRouter(prefix="/internal", tags=["internal"])
+
+
+@internal_router.get("/practices/{practice_id}/meta")
+async def get_practice_meta(
+    practice_id: str,
+    x_internal_key: str = Header(default=""),
+):
+    """
+    Return home_region for a practice.
+
+    Called exclusively by the router service to resolve practice → region.
+    Authenticated with INTERNAL_API_KEY only — never exposed to users.
+    """
+    if not _INTERNAL_API_KEY or x_internal_key != _INTERNAL_API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing internal API key")
+
+    db = get_db()
+    practice = await db.practices.find_one(
+        {"id": practice_id},
+        {"_id": 0, "home_region": 1, "id": 1},
+    )
+    if not practice:
+        raise HTTPException(status_code=404, detail="Practice not found")
+
+    home_region = practice.get("home_region")
+    if not home_region:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Practice {practice_id} has no home_region set. Backfill required.",
+        )
+
+    return {
+        "practice_id": practice_id,
+        "home_region": home_region,
+    }
 
 
 # ==== PROVIDER NAME / ROLE NORMALIZATION ====
@@ -99,6 +142,35 @@ async def get_practice_residency(
         "home_region":    practice.get("home_region"),
         "db_cluster":     practice.get("db_cluster"),
         "compute_region": practice.get("compute_region"),
+        "compliant":      practice.get("home_region") is not None,
+    }
+
+
+@router.get("/practice/residency")
+async def get_own_practice_residency(
+    current_user: dict = Depends(require_role("admin", "auditor")),
+    _scope=Depends(require_practice_scope()),
+):
+    """
+    Return data residency metadata for the authenticated admin's own practice.
+    Used by practice admins for self-service compliance audits.
+    """
+    db = get_db()
+    practice_id = current_user["practice_id"]
+    practice = await db.practices.find_one(
+        {"id": practice_id},
+        {"_id": 0, "home_region": 1, "db_cluster": 1, "compute_region": 1, "province": 1, "name": 1},
+    )
+    if not practice:
+        raise HTTPException(status_code=404, detail="Practice not found")
+
+    return {
+        "practice_id":    practice_id,
+        "practice_name":  practice.get("name"),
+        "province":       practice.get("province"),
+        "home_region":    practice.get("home_region"),
+        "db_cluster":     practice.get("db_cluster"),
+        "compute_region": os.getenv("COMPUTE_REGION", "unknown"),
         "compliant":      practice.get("home_region") is not None,
     }
 

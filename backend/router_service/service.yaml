@@ -1,0 +1,64 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: dental-ai-router
+  labels:
+    cloud.googleapis.com/location: us-central1
+  annotations:
+    run.googleapis.com/ingress: all
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "10"
+    spec:
+      containers:
+        - image: gcr.io/dental-ai-backend/dental-ai-router:latest
+          ports:
+            - name: http1
+              containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            periodSeconds: 10
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 12
+          env:
+            # Secrets from GCP Secret Manager
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: JWT_SECRET_KEY   # Reuses the existing JWT_SECRET_KEY secret
+                  key: latest
+            - name: INTERNAL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: INTERNAL_API_KEY
+                  key: latest
+            # Non-sensitive config
+            - name: API_WEST_BASE_URL
+              value: "https://api-west.dentalai.ca"
+            - name: API_EAST_BASE_URL
+              value: "https://api-east.dentalai.ca"
+            - name: PRACTICE_CACHE_TTL_SECONDS
+              value: "30"
+            - name: PROXY_TIMEOUT_SECONDS
+              value: "30"
+            - name: ROUTER_ENV
+              value: "production"
+          resources:
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+      serviceAccountName: dental-ai-router-sa
+  traffic:
+  - percent: 100
+    latestRevision: true

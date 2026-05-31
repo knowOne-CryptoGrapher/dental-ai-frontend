@@ -33,7 +33,8 @@ $SECRET_VARS = @(
     "STRIPE_SECRET_KEY",
     "STRIPE_WEBHOOK_SECRET",
     "CA_WEST_DB_URI",
-    "CA_EAST_DB_URI"
+    "CA_EAST_DB_URI",
+    "INTERNAL_API_KEY"
 )
 
 function Write-Step([string]$msg) {

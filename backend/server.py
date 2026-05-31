@@ -31,6 +31,7 @@ load_dotenv(".env", override=True)
 # Router Imports
 # -------------------------------------------------------------------
 from routers.auth_router import router as auth_router
+from routers.practice_router import internal_router
 from routers.billing_router import router as billing_router
 from routers.stripe_webhook_router import router as stripe_webhook_router
 from routers.onboarding_router import router as onboarding_router
@@ -261,6 +262,7 @@ async def health_ready():
         "status": "ready",
         "db": "ok",
         "compute_region": os.getenv("COMPUTE_REGION", "unknown"),
+        "db_region": os.getenv("DB_REGION", "unknown"),
     }
 
 
@@ -290,6 +292,7 @@ app.include_router(practice_config_router)
 app.include_router(superadmin_router)
 app.include_router(retell_api_router)
 app.include_router(retell_webhook_router)
+app.include_router(internal_router)
 
 # -------------------------------------------------------------------
 # Global Error Handler
