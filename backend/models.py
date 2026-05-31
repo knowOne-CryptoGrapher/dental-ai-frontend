@@ -212,12 +212,80 @@ class InsuranceClaim(BaseModel):
     group_number: Optional[str] = None
     procedures: List[dict] = []  # [{"code": "01101", "description": "...", "fee": 150.00}]
     total_amount: float = 0.0
-    status: str = "draft"  # draft, submitted, pending, approved, denied, partial
+    # Lifecycle: draft → ready_to_submit → submitted → accepted | rejected | error → paid | reversed
+    status: str = "draft"
     submission_method: str = "itrans"  # itrans, cdanet, manual
     response_data: Optional[dict] = None
     submitted_at: Optional[str] = None
     resolved_at: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    # ── CDAnet subscriber info ─────────────────────────────────────────────
+    subscriber_last_name: Optional[str] = None
+    subscriber_first_name: Optional[str] = None
+    subscriber_policy_number: Optional[str] = None
+    subscriber_certificate_number: Optional[str] = None
+    relationship_to_subscriber: Optional[str] = None  # self, spouse, child, other
+
+    # ── CDAnet carrier routing ─────────────────────────────────────────────
+    carrier_id: Optional[str] = None           # CDAnet carrier code
+    division_number: Optional[str] = None      # Optional carrier division
+    practice_province: Optional[str] = None    # Required for carrier routing — varies by province
+
+    # ── CDAnet transaction metadata ────────────────────────────────────────
+    cdanet_version: Optional[str] = "4.1"
+    transaction_type: Optional[str] = None     # claim, reversal, eligibility, predetermination
+    claim_reference_number: Optional[str] = None   # Assigned by carrier on response
+    network_reference_number: Optional[str] = None
+
+    # ── Adjudication details (populated from carrier response) ────────────
+    adjudication_code: Optional[str] = None
+    explanation_codes: List[str] = []
+    amount_approved: Optional[float] = None
+    amount_patient_responsibility: Optional[float] = None
+
+    # ── Submission tracking (required for retry rules and audit) ──────────
+    submission_attempts: int = 0
+    last_submitted_at: Optional[str] = None
+    last_error_message: Optional[str] = None  # Human-readable only — never raw CDAnet codes
+
+
+class ClaimCreate(BaseModel):
+    """Request body for POST /claims — creates a claim in draft state."""
+    patient_id: str
+    carrier: str
+    policy_number: str
+    group_number: Optional[str] = None
+    provider_id: Optional[str] = None
+    appointment_id: Optional[str] = None
+    procedures: List[dict] = []
+    # CDAnet fields — optional at creation, required before submission
+    carrier_id: Optional[str] = None
+    division_number: Optional[str] = None
+    practice_province: Optional[str] = None
+    subscriber_last_name: Optional[str] = None
+    subscriber_first_name: Optional[str] = None
+    subscriber_policy_number: Optional[str] = None
+    subscriber_certificate_number: Optional[str] = None
+    relationship_to_subscriber: Optional[str] = None
+    transaction_type: Optional[str] = "claim"
+
+
+class ClaimUpdate(BaseModel):
+    """Request body for PUT /claims/:id — updates mutable fields."""
+    status: Optional[str] = None
+    procedures: Optional[List[dict]] = None
+    total_amount: Optional[float] = None
+    carrier_id: Optional[str] = None
+    division_number: Optional[str] = None
+    practice_province: Optional[str] = None
+    subscriber_last_name: Optional[str] = None
+    subscriber_first_name: Optional[str] = None
+    subscriber_policy_number: Optional[str] = None
+    subscriber_certificate_number: Optional[str] = None
+    relationship_to_subscriber: Optional[str] = None
+    transaction_type: Optional[str] = None
+
 
 class EligibilityCheck(BaseModel):
     carrier: str
