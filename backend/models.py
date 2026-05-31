@@ -18,12 +18,18 @@ class Practice(BaseModel):
     default_timezone: str = "America/Toronto"
     default_retention_years: int = 7
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    # Data residency fields — set at onboarding, never changed
+    province: Optional[str] = None          # Two-letter province code (BC, ON, etc.)
+    home_region: Optional[str] = None       # "ca-west" or "ca-east" — derived from province
+    db_cluster: Optional[str] = None        # "atlas-ca-west" or "atlas-ca-east"
+    compute_region: Optional[str] = None    # GCP region label for audit
 
 class PracticeCreate(BaseModel):
     name: str
     contact_email: Optional[str] = None
     contact_phone: Optional[str] = None
     default_timezone: str = "America/Toronto"
+    province: Optional[str] = None          # Two-letter Canadian province code
 
 class Location(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -431,6 +437,7 @@ def default_practice_settings() -> dict:
 
 class OnboardingRequest(BaseModel):
     practice_name: str
+    province: str                           # Required — two-letter Canadian province code (BC, ON, etc.)
     timezone: str = "America/Toronto"
     contact_email: Optional[EmailStr] = None
     contact_phone: Optional[str] = None

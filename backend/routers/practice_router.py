@@ -3,11 +3,13 @@ import uuid
 from datetime import datetime, timezone
 import logging
 
+import os
 from models import PracticeCreate, LocationCreate, ProviderCreate
 from auth import (
     get_db, get_current_user, require_role, require_practice_access, log_audit_event
 )
 from plans import enforce_plan_limit
+from regions.region_config import derive_region, DB_CLUSTER_LABELS, COMPUTE_REGION_LABELS
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["practice"])
@@ -74,10 +76,52 @@ async def list_practices(current_user: dict = Depends(require_role("super_admin"
         p["location_count"] = await db.locations.count_documents({"practice_id": p["id"]})
     return practices
 
+@router.get("/admin/practices/{practice_id}/residency")
+async def get_practice_residency(
+    practice_id: str,
+    current_user: dict = Depends(require_role("super_admin", "admin")),
+):
+    """
+    Return data residency metadata for a practice.
+    Used for compliance audits — proves where a clinic's data lives.
+    """
+    db = get_db()
+    practice = await db.practices.find_one(
+        {"id": practice_id},
+        {"_id": 0, "home_region": 1, "db_cluster": 1, "compute_region": 1, "province": 1, "name": 1},
+    )
+    if not practice:
+        raise HTTPException(status_code=404, detail="Practice not found")
+    return {
+        "practice_id":    practice_id,
+        "practice_name":  practice.get("name"),
+        "province":       practice.get("province"),
+        "home_region":    practice.get("home_region"),
+        "db_cluster":     practice.get("db_cluster"),
+        "compute_region": practice.get("compute_region"),
+        "compliant":      practice.get("home_region") is not None,
+    }
+
+
 @router.post("/admin/practices")
 async def create_practice_admin(data: PracticeCreate, current_user: dict = Depends(require_role("super_admin"))):
     db = get_db()
     practice_id = str(uuid.uuid4())
+
+    # Derive region metadata from province if provided
+    region_fields: dict = {}
+    if data.province:
+        try:
+            home_region = derive_region(data.province)
+            region_fields = {
+                "province":       data.province.strip().upper(),
+                "home_region":    home_region.value,
+                "db_cluster":     DB_CLUSTER_LABELS[home_region],
+                "compute_region": os.getenv("COMPUTE_REGION", "northamerica-west2"),
+            }
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
     doc = {
         "id": practice_id,
         "name": data.name,
@@ -89,6 +133,7 @@ async def create_practice_admin(data: PracticeCreate, current_user: dict = Depen
         "default_timezone": data.default_timezone,
         "default_retention_years": 7,
         "created_at": datetime.now(timezone.utc).isoformat(),
+        **region_fields,
     }
     await db.practices.insert_one(doc)
     # Create default location

@@ -43,6 +43,8 @@ spec:
           failureThreshold: 12
         env:
         # Non-sensitive config
+        - name: COMPUTE_REGION
+          value: "northamerica-west2"   # Update per deployment region
         - name: LOG_LEVEL
           value: INFO
         - name: DATABASE_NAME
@@ -117,6 +119,16 @@ spec:
           valueFrom:
             secretKeyRef:
               name: STRIPE_WEBHOOK_SECRET
+              key: latest
+        - name: CA_WEST_DB_URI
+          valueFrom:
+            secretKeyRef:
+              name: CA_WEST_DB_URI
+              key: latest
+        - name: CA_EAST_DB_URI
+          valueFrom:
+            secretKeyRef:
+              name: CA_EAST_DB_URI
               key: latest
   traffic:
   - percent: 100

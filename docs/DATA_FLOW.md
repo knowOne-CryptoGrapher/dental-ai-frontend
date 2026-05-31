@@ -87,33 +87,36 @@ This is a PIPEDA requirement: organisations must have contractual protections in
 
 ## 5.4 Data Residency
 
-### Current deployment
+### Region-aware architecture
 
-| Component | Region | Location |
-|---|---|---|
-| Cloud Run (backend) | `us-west1` | Oregon, USA |
-| MongoDB Atlas | TBC — confirm cluster region | TBC |
+Each practice is assigned a `home_region` at onboarding based on province:
 
-### Canadian data residency requirements
+| Province | home_region | Compute | Atlas cluster |
+|---|---|---|---|
+| BC, AB, SK, MB, NT, YT | `ca-west` | northamerica-west2 (Calgary) | atlas-ca-west |
+| ON, QC, NB, NS, PE, NL, NU | `ca-east` | northamerica-northeast1 (Montreal) | atlas-ca-east |
 
-Canadian dental regulations and PIPEDA do not impose an absolute data-residency requirement for all personal information. However:
+PHI for a practice is always stored and processed in its assigned region.
+Cross-region data access is prevented at the DB client factory layer
+(`backend/regions/db_factory.py`).
 
-- Several provincial colleges recommend or require that patient health records be stored in Canada.
-- PIPEDA requires that personal information be protected with comparable safeguards regardless of where it is stored, and that individuals be informed if their data is transferred outside Canada.
-- Some dental practice management software markets itself on "data stays in Canada" as a trust differentiator.
+Province is collected at onboarding and stored as an immutable field on the Practice document.
+Attempts to change `province`, `home_region`, `db_cluster`, or `compute_region` after creation
+are rejected with HTTP 400.
 
-**Before onboarding any live clinic with Canadian patient data:**
+### Current deployment status
 
-1. Confirm whether the practice's provincial regulatory college requires Canadian data residency.
-2. If required: migrate Cloud Run to `northamerica-northeast1` (Montreal) and confirm the MongoDB Atlas cluster is in a Canadian region (`ca-central-1` on AWS or equivalent).
-3. Update the privacy notice / consent form to disclose cross-border transfers if data remains in `us-west1`.
+| Component | Current | Target | Status |
+|---|---|---|---|
+| Cloud Run | us-west1 (Oregon) | northamerica-west2 (Calgary) | Migration required before live clinics |
+| MongoDB Atlas | TBC | atlas-ca-west + atlas-ca-east clusters | Confirm cluster region |
 
-To check current Cloud Run region:
-```bash
-gcloud run services describe dental-ai-backend \
-  --project dental-ai-backend \
-  --format="value(metadata.labels['cloud.googleapis.com/location'])"
-```
+### Migration to Canadian regions
+
+Before onboarding any live clinic, complete the migration runbook in
+`docs/MIGRATION_RUNBOOK.md` (to be created when migration is executed).
+
+See also: [DPA_REGISTER.md](DPA_REGISTER.md) for data residency confirmation status and action items.
 
 ---
 

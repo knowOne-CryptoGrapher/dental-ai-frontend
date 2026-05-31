@@ -21,6 +21,7 @@ from auth import get_db, require_role, hash_password, create_access_token, log_a
 from agent.prompt_renderer import render_amanda_prompt
 from models import default_practice_settings
 from plans import is_valid_plan_id, list_plans, get_plan, DEFAULT_PLAN_ID
+from regions.region_config import derive_region, DB_CLUSTER_LABELS
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/superadmin", tags=["superadmin"])
@@ -202,12 +203,16 @@ async def resync_retell_agent(
 
 class PracticeCreatePayload(BaseModel):
     practice_name: str = Field(..., min_length=2, max_length=120)
+    province: str = Field(..., min_length=2, max_length=2, description="Two-letter Canadian province code")
     contact_email: EmailStr
     contact_phone: str | None = None
     timezone: str = "America/Toronto"
     admin_email: EmailStr
     admin_password: str = Field(..., min_length=8)
     admin_full_name: str = Field(..., min_length=2, max_length=120)
+
+
+_IMMUTABLE_PRACTICE_FIELDS = {"home_region", "db_cluster", "compute_region", "province"}
 
 
 class PracticeUpdatePayload(BaseModel):
@@ -241,6 +246,12 @@ async def create_practice(
         f"{defaults['branding']['agent_name']}. How can I help today?"
     )
 
+    # Derive data residency from province
+    try:
+        home_region = derive_region(payload.province)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
     practice_doc = {
         "id": practice_id,
         "name": payload.practice_name,
@@ -254,6 +265,11 @@ async def create_practice(
         "settings": defaults,
         "created_at": now_iso,
         "created_by_super_admin": current_user.get("id"),
+        # Data residency — immutable after creation
+        "province":       payload.province.strip().upper(),
+        "home_region":    home_region.value,
+        "db_cluster":     DB_CLUSTER_LABELS[home_region],
+        "compute_region": os.getenv("COMPUTE_REGION", "northamerica-west2"),
     }
     await db.practices.insert_one(practice_doc)
 
@@ -303,6 +319,15 @@ async def update_practice(
     update = {k: v for k, v in payload.model_dump().items() if v is not None}
     if not update:
         raise HTTPException(status_code=400, detail="No fields to update")
+
+    # Region fields are immutable after practice creation
+    attempted_immutable = set(update.keys()) & _IMMUTABLE_PRACTICE_FIELDS
+    if attempted_immutable:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Fields are immutable after practice creation: {sorted(attempted_immutable)}",
+        )
+
     if "status" in update and update["status"] not in {"active", "suspended", "onboarding"}:
         raise HTTPException(status_code=400, detail="Invalid status")
     if "subscription_plan" in update and not is_valid_plan_id(update["subscription_plan"]):

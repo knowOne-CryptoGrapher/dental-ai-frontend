@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     Single-command build and deploy for the dental-ai backend.
@@ -31,7 +31,9 @@ $SECRET_VARS = @(
     "GROQ_API_KEY",
     "RETELL_API_KEY",
     "STRIPE_SECRET_KEY",
-    "STRIPE_WEBHOOK_SECRET"
+    "STRIPE_WEBHOOK_SECRET",
+    "CA_WEST_DB_URI",
+    "CA_EAST_DB_URI"
 )
 
 function Write-Step([string]$msg) {
@@ -55,6 +57,15 @@ foreach ($line in Get-Content $ENV_FILE) {
     }
 }
 
+# Day-one: if regional DB URIs are not in .env, use MONGODB_URI as the fallback value.
+# When Atlas clusters are split, set explicit values in .env (or Secret Manager directly).
+if (-not $envVars.ContainsKey("CA_WEST_DB_URI") -or [string]::IsNullOrWhiteSpace($envVars["CA_WEST_DB_URI"])) {
+    $envVars["CA_WEST_DB_URI"] = $envVars["MONGODB_URI"]
+}
+if (-not $envVars.ContainsKey("CA_EAST_DB_URI") -or [string]::IsNullOrWhiteSpace($envVars["CA_EAST_DB_URI"])) {
+    $envVars["CA_EAST_DB_URI"] = $envVars["MONGODB_URI"]
+}
+
 $projectNumber = gcloud projects describe $PROJECT --format="value(projectNumber)"
 if ($LASTEXITCODE -ne 0) { throw "Could not retrieve project number" }
 $SA = "$projectNumber-compute@developer.gserviceaccount.com"
@@ -67,9 +78,9 @@ foreach ($varName in $SECRET_VARS) {
     $secretValue = $envVars[$varName]
     $tmpFile = [System.IO.Path]::GetTempFileName()
     try {
-        [System.IO.File]::WriteAllText($tmpFile, $secretValue, [System.Text.Encoding]::UTF8)
+        [System.IO.File]::WriteAllText($tmpFile, $secretValue, [System.Text.UTF8Encoding]::new($false))
 
-        gcloud secrets describe $varName --project $PROJECT 2>&1 | Out-Null
+        gcloud secrets describe $varName --project $PROJECT | Out-Null
         if ($LASTEXITCODE -ne 0) {
             Write-Host "  CREATE  $varName"
             gcloud secrets create $varName --project $PROJECT --data-file=$tmpFile
@@ -87,7 +98,7 @@ foreach ($varName in $SECRET_VARS) {
         --project $PROJECT `
         --member "serviceAccount:$SA" `
         --role "roles/secretmanager.secretAccessor" `
-        --quiet 2>&1 | Out-Null
+        --quiet | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Failed to grant IAM binding for $varName" }
 }
 

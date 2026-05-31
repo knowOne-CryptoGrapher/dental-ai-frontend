@@ -229,6 +229,8 @@ async def shutdown_event():
     global _mongo_client
     if _mongo_client:
         _mongo_client.close()
+    from regions.db_factory import close_all_clients
+    await close_all_clients()
     logger.info("server_shutdown")
 
 # -------------------------------------------------------------------
@@ -255,7 +257,11 @@ async def health_ready():
     except Exception as exc:
         logger.error("health_ready_failed", extra={"error": str(exc)})
         raise HTTPException(status_code=503, detail="DB unavailable")
-    return {"status": "ready", "db": "ok"}
+    return {
+        "status": "ready",
+        "db": "ok",
+        "compute_region": os.getenv("COMPUTE_REGION", "unknown"),
+    }
 
 
 @app.get("/health", tags=["health"])

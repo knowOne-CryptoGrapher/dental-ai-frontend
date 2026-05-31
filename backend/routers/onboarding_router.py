@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Request
 from models import OnboardingRequest, default_practice_settings
 from auth import get_db, hash_password, create_access_token
 from agent.prompt_renderer import render_amanda_prompt
+from regions.region_config import derive_region, DB_CLUSTER_LABELS
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/onboarding", tags=["onboarding"])
@@ -64,6 +65,12 @@ async def onboard_practice(req: OnboardingRequest, request: Request):
     if existing_user:
         raise HTTPException(status_code=409, detail="Email already registered")
 
+    # Derive data residency from province — raises 400 on invalid code
+    try:
+        home_region = derive_region(req.province)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
     now_iso = datetime.now(timezone.utc).isoformat()
     practice_id = str(uuid.uuid4())
 
@@ -75,7 +82,7 @@ async def onboard_practice(req: OnboardingRequest, request: Request):
         f"{defaults['branding']['agent_name']}. How can I help today?"
     )
 
-    # Create practice
+    # Create practice — region fields are set here and are immutable thereafter
     practice_doc = {
         "id": practice_id,
         "name": req.practice_name,
@@ -88,6 +95,11 @@ async def onboard_practice(req: OnboardingRequest, request: Request):
         "default_retention_years": 7,
         "settings": defaults,
         "created_at": now_iso,
+        # Data residency — immutable after creation
+        "province":       req.province.strip().upper(),
+        "home_region":    home_region.value,
+        "db_cluster":     DB_CLUSTER_LABELS[home_region],
+        "compute_region": os.getenv("COMPUTE_REGION", "northamerica-west2"),
     }
     await db.practices.insert_one(practice_doc)
 
