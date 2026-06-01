@@ -115,8 +115,26 @@ try {
 
 # ── 4. Deploy ─────────────────────────────────────────────────────────────────
 Write-Step "Deploying to Cloud Run"
-gcloud run services replace $SVC_YAML --platform managed --region $REGION --project $PROJECT
-if ($LASTEXITCODE -ne 0) { throw "Deployment failed" }
+
+# Resolve :latest to its current digest so Cloud Run always creates a new
+# revision, even when the service.yaml configuration string is unchanged.
+$digest = gcloud container images describe "${IMAGE}:latest" `
+    --project $PROJECT --format "value(image_summary.digest)"
+if ($LASTEXITCODE -ne 0 -or -not $digest) { throw "Could not resolve image digest" }
+$IMAGE_WITH_DIGEST = "${IMAGE}@${digest}"
+Write-Host "  Image digest: $IMAGE_WITH_DIGEST"
+
+# Patch service.yaml in-memory with the pinned digest, replace, then leave
+# the file on disk still referencing :latest for the next commit.
+$svcContent = [System.IO.File]::ReadAllText($SVC_YAML)
+$svcPatched  = $svcContent -replace [regex]::Escape("image: ${IMAGE}"), "image: ${IMAGE_WITH_DIGEST}"
+$patchedFile = [System.IO.Path]::GetTempFileName() + ".yaml"
+[System.IO.File]::WriteAllText($patchedFile, $svcPatched, [System.Text.UTF8Encoding]::new($false))
+
+gcloud run services replace $patchedFile --platform managed --region $REGION --project $PROJECT
+$deployResult = $LASTEXITCODE
+Remove-Item $patchedFile -Force -ErrorAction SilentlyContinue
+if ($deployResult -ne 0) { throw "Deployment failed" }
 
 # ── 5. Summary ────────────────────────────────────────────────────────────────
 Write-Step "Done"
