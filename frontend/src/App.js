@@ -22,6 +22,8 @@ import SuperAdminRetellPage from "./pages/SuperAdminRetellPage";
 import SuperAdminDashboardPage from "./pages/SuperAdminDashboardPage";
 import SuperAdminPracticesPage from "./pages/SuperAdminPracticesPage";
 import SuperAdminLLMPage from "./pages/SuperAdminLLMPage";
+import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
+import TermsPage from "./pages/TermsPage";
 import ErrorBoundary from "./components/ErrorBoundary";
 import axios from "axios";
 
@@ -132,6 +134,10 @@ function AppContent() {
 
   return (
     <Routes>
+      {/* Public legal pages — no auth required */}
+      <Route path="/legal/privacy-policy" element={<PrivacyPolicyPage />} />
+      <Route path="/legal/terms" element={<TermsPage />} />
+
       <Route path="/login" element={user ? <Navigate to={homeFor()} replace /> : <LoginPage />} />
       <Route path="/signup" element={<OnboardingWizard />} />
       <Route path="/onboarding" element={

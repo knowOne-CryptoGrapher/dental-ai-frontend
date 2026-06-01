@@ -21,6 +21,23 @@ import { toast } from 'sonner';
 
 import { useAuth } from '@/hooks/useAuth';
 import api from '@/lib/api';
+import { TERMS_VERSION, PRIVACY_POLICY_VERSION } from '@/config/legal';
+
+const CANADIAN_PROVINCES = [
+  { code: 'AB', label: 'Alberta' },
+  { code: 'BC', label: 'British Columbia' },
+  { code: 'MB', label: 'Manitoba' },
+  { code: 'NB', label: 'New Brunswick' },
+  { code: 'NL', label: 'Newfoundland and Labrador' },
+  { code: 'NS', label: 'Nova Scotia' },
+  { code: 'NT', label: 'Northwest Territories' },
+  { code: 'NU', label: 'Nunavut' },
+  { code: 'ON', label: 'Ontario' },
+  { code: 'PE', label: 'Prince Edward Island' },
+  { code: 'QC', label: 'Quebec' },
+  { code: 'SK', label: 'Saskatchewan' },
+  { code: 'YT', label: 'Yukon' },
+];
 
 const STEPS = [
   { id: 0, name: 'Welcome', icon: Sparkles },
@@ -84,12 +101,15 @@ export default function OnboardingWizard() {
 
   const [signup, setSignup] = useState({
     practice_name: '',
+    province: '',
     timezone: 'America/Toronto',
     admin_email: '',
     admin_password: '',
     admin_full_name: '',
     contact_phone: '',
   });
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
 
   const [hours, setHours] = useState({
     timezone: 'America/Toronto',
@@ -145,7 +165,13 @@ export default function OnboardingWizard() {
   const handleSignup = async () => {
     setSaving(true);
     try {
-      await onboardPractice(signup);
+      const payload = {
+        ...signup,
+        accepted_terms_version: TERMS_VERSION,
+        accepted_privacy_version: PRIVACY_POLICY_VERSION,
+        accepted_at: new Date().toISOString(),
+      };
+      await onboardPractice(payload);
       toast.success('Practice created!');
       next();
     } catch (err) {
@@ -382,12 +408,77 @@ export default function OnboardingWizard() {
               />
             </div>
 
+            <div>
+              <Label>Province / Territory</Label>
+              <select
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                value={signup.province}
+                onChange={(e) => setSignup({ ...signup, province: e.target.value })}
+                required
+              >
+                <option value="">Select province…</option>
+                {CANADIAN_PROVINCES.map((p) => (
+                  <option key={p.code} value={p.code}>{p.label}</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Determines which Canadian data region your practice is assigned to.
+              </p>
+            </div>
+
+            <div className="border-t border-gray-100 pt-4 space-y-3">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                  checked={acceptedTerms}
+                  onChange={(e) => setAcceptedTerms(e.target.checked)}
+                  required
+                />
+                <span className="text-sm text-gray-700">
+                  I agree to the{' '}
+                  <a
+                    href="/legal/terms"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-teal-600 hover:underline font-medium"
+                  >
+                    Terms &amp; Conditions
+                  </a>
+                </span>
+              </label>
+
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                  checked={acceptedPrivacy}
+                  onChange={(e) => setAcceptedPrivacy(e.target.checked)}
+                  required
+                />
+                <span className="text-sm text-gray-700">
+                  I have read and agree to the{' '}
+                  <a
+                    href="/legal/privacy-policy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-teal-600 hover:underline font-medium"
+                  >
+                    Privacy Policy
+                  </a>
+                </span>
+              </label>
+            </div>
+
             <div className="flex justify-between">
               <Button variant="outline" onClick={back}>
                 <ChevronLeft className="w-4 h-4 mr-1" />
                 Back
               </Button>
-              <Button onClick={handleSignup} disabled={saving}>
+              <Button
+                onClick={handleSignup}
+                disabled={!acceptedTerms || !acceptedPrivacy || !signup.province || saving}
+              >
                 {saving ? <Loader2 className="animate-spin" /> : 'Save & Continue'}
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>

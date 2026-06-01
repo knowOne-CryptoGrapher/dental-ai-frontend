@@ -444,3 +444,7 @@ class OnboardingRequest(BaseModel):
     admin_email: EmailStr
     admin_password: str
     admin_full_name: str
+    # Legal acceptance — required at registration, immutable after creation
+    accepted_terms_version: str = Field(..., description="Version of T&C accepted")
+    accepted_privacy_version: str = Field(..., description="Version of Privacy Policy accepted")
+    accepted_at: datetime = Field(..., description="Timestamp of acceptance (ISO 8601)")

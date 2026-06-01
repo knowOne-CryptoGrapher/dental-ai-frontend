@@ -271,6 +271,20 @@ async def health_check():
     """Legacy health endpoint — preserved for backward compatibility."""
     return {"status": "ok", "llm_router": llm_manager.status()}
 
+
+@app.get("/legal/versions", tags=["legal"])
+async def get_legal_versions():
+    """
+    Return current legal document versions.
+    Frontend uses this to verify version sync before registration.
+    No authentication required — public endpoint.
+    """
+    from config import TERMS_VERSION, PRIVACY_POLICY_VERSION
+    return {
+        "terms_version":   TERMS_VERSION,
+        "privacy_version": PRIVACY_POLICY_VERSION,
+    }
+
 # -------------------------------------------------------------------
 # Include Routers
 # -------------------------------------------------------------------

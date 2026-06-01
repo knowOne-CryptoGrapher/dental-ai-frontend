@@ -212,7 +212,10 @@ class PracticeCreatePayload(BaseModel):
     admin_full_name: str = Field(..., min_length=2, max_length=120)
 
 
-_IMMUTABLE_PRACTICE_FIELDS = {"home_region", "db_cluster", "compute_region", "province"}
+_IMMUTABLE_PRACTICE_FIELDS = {
+    "home_region", "db_cluster", "compute_region", "province",
+    "accepted_terms_version", "accepted_privacy_version", "accepted_at", "accepted_ip",
+}
 
 
 class PracticeUpdatePayload(BaseModel):

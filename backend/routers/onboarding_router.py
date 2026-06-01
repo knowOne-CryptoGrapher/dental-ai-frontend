@@ -7,9 +7,10 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
 
 from models import OnboardingRequest, default_practice_settings
-from auth import get_db, hash_password, create_access_token
+from auth import get_db, hash_password, create_access_token, log_audit_event
 from agent.prompt_renderer import render_amanda_prompt
 from regions.region_config import derive_region, DB_CLUSTER_LABELS
+from config import TERMS_VERSION, PRIVACY_POLICY_VERSION
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/onboarding", tags=["onboarding"])
@@ -65,6 +66,42 @@ async def onboard_practice(req: OnboardingRequest, request: Request):
     if existing_user:
         raise HTTPException(status_code=409, detail="Email already registered")
 
+    # Validate legal version match — reject stale acceptances
+    if req.accepted_terms_version != TERMS_VERSION:
+        await log_audit_event(
+            user_id="system", practice_id=None,
+            action="legal_version_mismatch", resource_type="registration",
+            details={
+                "field": "accepted_terms_version",
+                "submitted": req.accepted_terms_version,
+                "current": TERMS_VERSION,
+            },
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=f"Terms version mismatch. Expected {TERMS_VERSION}, got {req.accepted_terms_version}. Please refresh and try again.",
+        )
+    if req.accepted_privacy_version != PRIVACY_POLICY_VERSION:
+        await log_audit_event(
+            user_id="system", practice_id=None,
+            action="legal_version_mismatch", resource_type="registration",
+            details={
+                "field": "accepted_privacy_version",
+                "submitted": req.accepted_privacy_version,
+                "current": PRIVACY_POLICY_VERSION,
+            },
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=f"Privacy policy version mismatch. Expected {PRIVACY_POLICY_VERSION}, got {req.accepted_privacy_version}. Please refresh and try again.",
+        )
+
+    # Extract accepted_ip server-side — never trust client-supplied IP
+    accepted_ip = (
+        request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        or (request.client.host if request.client else "unknown")
+    )
+
     # Derive data residency from province — raises 400 on invalid code
     try:
         home_region = derive_region(req.province)
@@ -100,6 +137,11 @@ async def onboard_practice(req: OnboardingRequest, request: Request):
         "home_region":    home_region.value,
         "db_cluster":     DB_CLUSTER_LABELS[home_region],
         "compute_region": os.getenv("COMPUTE_REGION", "northamerica-west2"),
+        # Legal acceptance — immutable after creation
+        "accepted_terms_version":   req.accepted_terms_version,
+        "accepted_privacy_version": req.accepted_privacy_version,
+        "accepted_at":              req.accepted_at.isoformat(),
+        "accepted_ip":              accepted_ip,
     }
     await db.practices.insert_one(practice_doc)
 
@@ -113,6 +155,24 @@ async def onboard_practice(req: OnboardingRequest, request: Request):
             "is_active": True,
             "created_at": now_iso,
         }
+    )
+
+    # Audit log — practice registration with legal acceptance record
+    # Never log: practice name, contact info, or any PHI
+    await log_audit_event(
+        user_id="system",
+        practice_id=practice_id,
+        action="practice_registered",
+        resource_type="practice",
+        resource_id=practice_id,
+        details={
+            "accepted_terms_version":   req.accepted_terms_version,
+            "accepted_privacy_version": req.accepted_privacy_version,
+            "accepted_at":              req.accepted_at.isoformat(),
+            "accepted_ip":              accepted_ip,
+            "province":                 req.province.strip().upper(),
+            "home_region":              practice_doc.get("home_region"),
+        },
     )
 
     # Admin user
