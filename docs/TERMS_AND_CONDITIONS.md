@@ -1,5 +1,5 @@
 # Terms & Conditions
-Version 1.0 — Last updated: 2026-06-01
+Version 1.1 — Last updated: 2026-06-01
 
 ---
 
@@ -41,6 +41,17 @@ Version 1.0 — Last updated: 2026-06-01
 - Dental AI is a software tool, not a licensed dental provider
 - We are not liable for clinical decisions made using the service
 - Our liability is limited to fees paid in the preceding 3 months
+
+---
+
+## 5a. AI Receptionist Disclaimer
+
+- The AI receptionist is a scheduling and information tool only
+- AI output is NOT medical or dental advice
+- AI output is NOT insurance advice or a coverage guarantee
+- The dental clinic must verify all information before acting on it
+- The AI may make errors — always confirm with the dental team
+- No AI response constitutes a binding commitment by the practice
 
 ---
 

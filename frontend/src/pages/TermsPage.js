@@ -19,7 +19,7 @@ export default function TermsPage() {
             ← Back
           </Link>
           <h1 className="text-3xl font-bold text-gray-900">Terms &amp; Conditions</h1>
-          <p className="text-sm text-gray-500 mt-1">Version 1.0 — Last updated: 2026-06-01</p>
+          <p className="text-sm text-gray-500 mt-1">Version 1.1 — Last updated: 2026-06-01</p>
         </div>
 
         <Section title="1. Acceptable use">
@@ -60,6 +60,17 @@ export default function TermsPage() {
             <li>Dental AI is a software tool, not a licensed dental provider</li>
             <li>We are not liable for clinical decisions made using the service</li>
             <li>Our liability is limited to fees paid in the preceding 3 months</li>
+          </ul>
+        </Section>
+
+        <Section title="5a. AI Receptionist Disclaimer">
+          <ul className="list-disc pl-5 space-y-1">
+            <li>The AI receptionist is a scheduling and information tool only</li>
+            <li>AI output is NOT medical or dental advice</li>
+            <li>AI output is NOT insurance advice or a coverage guarantee</li>
+            <li>The dental clinic must verify all information before acting on it</li>
+            <li>The AI may make errors — always confirm with the dental team</li>
+            <li>No AI response constitutes a binding commitment by the practice</li>
           </ul>
         </Section>
 

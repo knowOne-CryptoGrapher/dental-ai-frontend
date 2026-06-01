@@ -49,6 +49,8 @@ from routers.practice_config_router import router as practice_config_router
 from routers.superadmin_router import router as superadmin_router
 from routers.retell_api_router import router as retell_api_router
 from routers.retell_webhook_router import router as retell_webhook_router
+from routers.pending_actions_router import router as pending_actions_router
+from routers.ai_safety_router import router as ai_safety_router
 
 # -------------------------------------------------------------------
 # LLM Manager Initialization
@@ -296,6 +298,8 @@ app.include_router(superadmin_router)
 app.include_router(retell_api_router)
 app.include_router(retell_webhook_router)
 app.include_router(internal_router)
+app.include_router(pending_actions_router)
+app.include_router(ai_safety_router)
 
 # -------------------------------------------------------------------
 # Global Error Handler

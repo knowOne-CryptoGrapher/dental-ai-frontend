@@ -309,6 +309,26 @@ class ClaimSubmit(BaseModel):
     appointment_id: Optional[str] = None
     procedures: List[dict] = []
 
+# ==== AI / PENDING ACTIONS ====
+
+PENDING_ACTION_TTL_HOURS = 4  # If not approved within 4 hours → expire
+
+class PendingAction(BaseModel):
+    id: str
+    practice_id: str
+    call_id: str                    # Retell call ID
+    patient_id: Optional[str] = None
+    action_type: str                # complex_booking, insurance_change, multi_cancel, outbound_commit
+    action_payload: dict            # The data needed to execute the action
+    ai_summary: str                 # Human-readable description of what the AI wants to do
+    status: str = "pending"         # pending, approved, rejected, expired
+    created_at: str
+    expires_at: str                 # Auto-expire if not actioned — configurable
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[str] = None
+    review_note: Optional[str] = None
+
+
 # ==== BILLING ====
 
 class BillingCustomer(BaseModel):

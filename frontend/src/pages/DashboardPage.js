@@ -157,6 +157,11 @@ export default function DashboardPage({ useMock = false }) {
         <p className="text-sm text-gray-500 mt-1">Overview of your dental practice</p>
       </div>
 
+      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+        ⚠️ AI suggestions must be verified by staff before acting on them.
+        AI output is not medical or insurance advice.
+      </div>
+
       {pendingNotifications.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-2">
