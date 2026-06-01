@@ -31,6 +31,7 @@ load_dotenv(".env", override=True)
 # Router Imports
 # -------------------------------------------------------------------
 from routers.auth_router import router as auth_router
+from routers.legal_router import router as legal_router
 from routers.practice_router import internal_router
 from routers.billing_router import router as billing_router
 from routers.stripe_webhook_router import router as stripe_webhook_router
@@ -272,23 +273,11 @@ async def health_check():
     return {"status": "ok", "llm_router": llm_manager.status()}
 
 
-@app.get("/legal/versions", tags=["legal"])
-async def get_legal_versions():
-    """
-    Return current legal document versions.
-    Frontend uses this to verify version sync before registration.
-    No authentication required — public endpoint.
-    """
-    from config import TERMS_VERSION, PRIVACY_POLICY_VERSION
-    return {
-        "terms_version":   TERMS_VERSION,
-        "privacy_version": PRIVACY_POLICY_VERSION,
-    }
-
 # -------------------------------------------------------------------
 # Include Routers
 # -------------------------------------------------------------------
 
+app.include_router(legal_router)
 app.include_router(auth_router)
 app.include_router(billing_router)
 app.include_router(stripe_webhook_router)
