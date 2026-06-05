@@ -72,7 +72,8 @@ export default function CallLogsPage({ useMock = false }) {
     if (!timestamp) return '—';
     try {
       const d = new Date(timestamp);
-      return d.toLocaleString('en-US', {
+      return d.toLocaleString(undefined, {
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         month: 'short',
         day: 'numeric',
         hour: 'numeric',

@@ -63,6 +63,7 @@ export default function AppointmentsPage({ useMock = false }) {
 
   const handleCancel = async (appointmentId) => {
     if (!window.confirm('Cancel this appointment?')) return;
+    console.log('Cancelling appointment:', appointmentId);
     try {
       if (useMock) {
         setAppointments(prev =>

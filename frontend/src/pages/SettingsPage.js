@@ -60,10 +60,16 @@ export default function SettingsPage({ useMock = false }) {
     setLoadingLogs(true);
 
     if (useMock) {
+      const _at = (daysOffset, hour, minute = 0) => {
+        const d = new Date();
+        d.setDate(d.getDate() + daysOffset);
+        d.setHours(hour, minute, 0, 0);
+        return d.toISOString();
+      };
       setAuditLogs([
-        { id: '1', action: 'patient_created', resource_type: 'patient', timestamp: '2025-07-15T10:00:00Z', details: { patient_name: 'Sarah Johnson' } },
-        { id: '2', action: 'appointment_created', resource_type: 'appointment', timestamp: '2025-07-15T09:30:00Z', details: { patient_name: 'James Wilson' } },
-        { id: '3', action: 'consent_captured', resource_type: 'patient', timestamp: '2025-07-14T14:00:00Z', details: { patient_name: 'Emily Chen' } },
+        { id: '1', action: 'patient_created', resource_type: 'patient', timestamp: _at(0, 10, 0), details: { patient_name: 'Sarah Johnson' } },
+        { id: '2', action: 'appointment_created', resource_type: 'appointment', timestamp: _at(0, 9, 30), details: { patient_name: 'James Wilson' } },
+        { id: '3', action: 'consent_captured', resource_type: 'patient', timestamp: _at(-1, 14, 0), details: { patient_name: 'Emily Chen' } },
       ]);
       setLoadingLogs(false);
       return;
@@ -125,7 +131,8 @@ export default function SettingsPage({ useMock = false }) {
   const formatTime = (ts) => {
     if (!ts) return '—';
     try {
-      return new Date(ts).toLocaleString('en-US', {
+      return new Date(ts).toLocaleString(undefined, {
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         month: 'short',
         day: 'numeric',
         hour: 'numeric',
