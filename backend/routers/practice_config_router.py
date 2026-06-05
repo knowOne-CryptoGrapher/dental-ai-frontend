@@ -9,6 +9,7 @@ from models import (
     default_practice_settings,
 )
 from auth import get_db, require_role, log_audit_event
+from retell.retell_sync_service import sync_practice
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/practice", tags=["practice_config"])
@@ -109,7 +110,19 @@ async def update_config(
     await log_audit_event(current_user["id"], practice_id, "practice_config_updated",
                           "practice", practice_id, {"keys": list(body.keys())},
                           request.client.host if request.client else None)
-    return await get_config(practice_id, current_user)
+
+    config = await get_config(practice_id, current_user)
+
+    # Re-fetch full practice doc so the prompt renderer sees updated settings.
+    _PROMPT_KEYS = {"branding", "hours", "appointment_types", "emergency"}
+    if _PROMPT_KEYS & set(body.keys()):
+        updated_practice = await _get_practice_or_404(db, practice_id)
+        sync_result = await sync_practice(updated_practice, db)
+        config["retell_sync"] = "ok" if sync_result.get("synced") else (
+            "skipped" if sync_result.get("skipped") else "failed"
+        )
+
+    return config
 
 
 # ==== Branding ====
@@ -133,7 +146,17 @@ async def update_branding(
         {"id": practice_id},
         {"$set": {"settings.branding": body.model_dump()}}
     )
-    return body.model_dump()
+
+    # Re-fetch so the prompt renderer sees the freshly saved branding.
+    updated_practice = await _get_practice_or_404(db, practice_id)
+    sync_result = await sync_practice(updated_practice, db)
+
+    return {
+        **body.model_dump(),
+        "retell_sync": "ok" if sync_result.get("synced") else (
+            "skipped" if sync_result.get("skipped") else "failed"
+        ),
+    }
 
 
 # ==== Hours ====
