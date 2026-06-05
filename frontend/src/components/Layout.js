@@ -9,6 +9,7 @@ import {
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import ImpersonationBanner from './ImpersonationBanner';
+import { Toaster } from './ui/sonner';
 import { useFeatures } from '../hooks/useFeatures';
 
 export default function Layout({ children, notifications = [], onNotificationRead }) {
@@ -265,6 +266,7 @@ export default function Layout({ children, notifications = [], onNotificationRea
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">{children}</main>
       </div>
+      <Toaster position="top-right" richColors closeButton />
     </div>
   );
 }

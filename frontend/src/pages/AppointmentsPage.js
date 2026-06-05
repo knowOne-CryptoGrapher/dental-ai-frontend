@@ -8,19 +8,23 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import {
   Calendar, Clock, CheckCircle2, XCircle, AlertTriangle,
-  Filter, Search, Loader2, ShieldCheck
+  Filter, Search, Loader2, ShieldCheck, Plus,
 } from 'lucide-react';
 import { api } from '../config/api';
 import { mockAppointments } from '../data/mockData';
+import CreateAppointmentModal from '../components/CreateAppointmentModal';
 
 export default function AppointmentsPage({ useMock = false }) {
-  const { isAdmin } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [verifyDialog, setVerifyDialog] = useState(null);
   const [verifying, setVerifying] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+
+  const canCreate = user?.role !== 'auditor';
 
   useEffect(() => {
     fetchAppointments();
@@ -128,12 +132,23 @@ export default function AppointmentsPage({ useMock = false }) {
 
   return (
     <div className="space-y-6 max-w-7xl">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Appointments</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          {appointments.length} total appointments
-          {pendingCount > 0 && ` · ${pendingCount} pending verification`}
-        </p>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Appointments</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {appointments.length} total appointments
+            {pendingCount > 0 && ` · ${pendingCount} pending verification`}
+          </p>
+        </div>
+        {canCreate && (
+          <Button
+            className="bg-teal-600 hover:bg-teal-700 shrink-0"
+            onClick={() => setCreateOpen(true)}
+          >
+            <Plus className="w-4 h-4 mr-1.5" />
+            Create Appointment
+          </Button>
+        )}
       </div>
 
       <div className="flex items-center gap-3 flex-wrap">
@@ -272,6 +287,12 @@ export default function AppointmentsPage({ useMock = false }) {
           )}
         </div>
       )}
+
+      <CreateAppointmentModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => fetchAppointments()}
+      />
 
       <Dialog open={!!verifyDialog} onOpenChange={() => setVerifyDialog(null)}>
         <DialogContent className="max-w-sm">

@@ -203,6 +203,17 @@ class AppointmentCreate(BaseModel):
     provider_id: Optional[str] = None
     notes: Optional[str] = None
 
+class ManualAppointmentCreate(BaseModel):
+    """Body for POST /api/practices/{id}/appointments (staff-created appointments)."""
+    full_name: str
+    phone: str
+    email: Optional[str] = None
+    appointment_type: str        # id from practice settings.appointment_types
+    date: str                    # YYYY-MM-DD
+    time: str                    # HH:MM
+    provider_id: Optional[str] = None
+    notes: Optional[str] = None
+
 # ==== INSURANCE ====
 
 class InsuranceClaim(BaseModel):

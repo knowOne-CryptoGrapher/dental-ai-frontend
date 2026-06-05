@@ -5,7 +5,7 @@ import logging
 
 from pymongo.errors import DuplicateKeyError as MongoDuplicateKeyError
 
-from models import AppointmentCreate
+from models import AppointmentCreate, ManualAppointmentCreate
 from auth import get_db, get_current_user, require_role, log_audit_event, log_analytics_event, detect_emergency
 
 logger = logging.getLogger(__name__)
@@ -234,3 +234,107 @@ async def get_stats(current_user: dict = Depends(get_current_user)):
         "locations": await db.locations.count_documents({"practice_id": practice_id, "is_active": True}),
         "providers": await db.providers.count_documents({"practice_id": practice_id, "is_active": True}),
     }
+
+
+# ==== MANUAL APPOINTMENT CREATION ====
+
+@router.post("/practices/{practice_id}/appointments")
+async def create_appointment_manual(
+    practice_id: str,
+    body: ManualAppointmentCreate,
+    request: Request,
+    current_user: dict = Depends(require_role("admin", "staff", "provider")),
+):
+    """Staff/admin/provider create a manual appointment directly."""
+    # Verify caller belongs to this practice
+    if current_user.get("role") != "super_admin" and current_user.get("practice_id") != practice_id:
+        raise HTTPException(status_code=404, detail="Practice not found")
+
+    db = get_db()
+
+    # Validate practice exists and get appointment types
+    practice = await db.practices.find_one({"id": practice_id}, {"_id": 0})
+    if not practice:
+        raise HTTPException(status_code=404, detail="Practice not found")
+
+    apt_types = (practice.get("settings") or {}).get("appointment_types") or []
+    type_map = {t["id"]: t for t in apt_types}
+    if body.appointment_type not in type_map:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown appointment type '{body.appointment_type}'. Valid: {list(type_map)}",
+        )
+    apt_type_obj = type_map[body.appointment_type]
+
+    # Validate provider belongs to practice
+    provider_name = None
+    if body.provider_id:
+        provider = await db.providers.find_one(
+            {"id": body.provider_id, "practice_id": practice_id},
+            {"_id": 0, "name": 1},
+        )
+        if not provider:
+            raise HTTPException(status_code=404, detail="Provider not found in this practice")
+        provider_name = provider["name"]
+
+    # Find or create patient by phone
+    phone_clean = body.phone.strip()
+    patient = await db.patients.find_one(
+        {"practice_id": practice_id, "phone": phone_clean},
+        {"_id": 0, "id": 1, "name": 1},
+    )
+    if patient:
+        patient_id = patient["id"]
+    else:
+        patient_id = str(uuid.uuid4())
+        await db.patients.insert_one({
+            "id": patient_id,
+            "practice_id": practice_id,
+            "name": body.full_name.strip(),
+            "phone": phone_clean,
+            "email": body.email,
+            "consent_given": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+    now = datetime.now(timezone.utc)
+    apt_id = str(uuid.uuid4())
+    apt_doc = {
+        "id": apt_id,
+        "practice_id": practice_id,
+        "patient_id": patient_id,
+        "patient_name": body.full_name.strip(),
+        "patient_phone": phone_clean,
+        "appointment_date": body.date,
+        "appointment_time": body.time,
+        "service_type": apt_type_obj["name"],
+        "duration_minutes": apt_type_obj.get("duration_min", 30),
+        "provider_id": body.provider_id,
+        "provider_name": provider_name,
+        "notes": body.notes,
+        "status": "scheduled",
+        "source": "manual",
+        "created_by": current_user["id"],
+        "is_emergency": False,
+        "created_at": now.isoformat(),
+    }
+    await db.appointments.insert_one(apt_doc)
+    apt_doc.pop("_id", None)
+
+    # Log to ai_safety_logs — manual appointments never trigger Retell sync
+    await db.ai_safety_logs.insert_one({
+        "event_type": "appointment_created_manual",
+        "practice_id": practice_id,
+        "user_id": current_user["id"],
+        "appointment_id": apt_id,
+        "created_at": now.isoformat(),
+    })
+
+    await log_audit_event(
+        current_user["id"], practice_id, "appointment_created_manual",
+        "appointment", apt_id,
+        {"patient_name": body.full_name, "date": body.date, "type": body.appointment_type},
+        request.client.host if request.client else None,
+    )
+
+    return apt_doc
