@@ -127,7 +127,7 @@ async def onboard_practice(req: OnboardingRequest, request: Request):
         "contact_phone": req.contact_phone,
         "status": "onboarding",
         "billing_status": "active",
-        "subscription_plan": "starter",
+        "subscription_plan": "basic",
         "default_timezone": req.timezone,
         "default_retention_years": 7,
         "settings": defaults,

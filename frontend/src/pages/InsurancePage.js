@@ -12,6 +12,8 @@ import {
   Shield, DollarSign, Loader2, AlertCircle
 } from 'lucide-react';
 import { api } from '../config/api';
+import { useFeatures } from '../hooks/useFeatures';
+import UpgradePage from '../components/UpgradePage';
 
 export default function InsurancePage() {
   const [tab, setTab] = useState('claims');
@@ -19,6 +21,7 @@ export default function InsurancePage() {
   const [carriers, setCarriers] = useState([]);
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { has, featuresLoading } = useFeatures();
 
   const [eligDialog, setEligDialog] = useState(false);
   const [claimDialog, setClaimDialog] = useState(false);
@@ -41,8 +44,9 @@ export default function InsurancePage() {
   });
 
   useEffect(() => {
+    if (featuresLoading || !has('insurance')) return;
     fetchData();
-  }, []);
+  }, [featuresLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchData = async () => {
     try {
@@ -103,6 +107,10 @@ export default function InsurancePage() {
     denied: { color: 'bg-red-50 text-red-600', icon: XCircle },
     partial: { color: 'bg-amber-50 text-amber-700', icon: AlertCircle },
   };
+
+  if (!featuresLoading && !has('insurance')) {
+    return <UpgradePage feature="Insurance" requiredTier="Professional" />;
+  }
 
   return (
     <div className="space-y-6 max-w-7xl">

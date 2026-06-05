@@ -49,7 +49,7 @@ async def register(data: UserRegister):
             "contact_email": data.email,
             "status": "active",
             "billing_status": "active",
-            "subscription_plan": "starter",
+            "subscription_plan": "basic",
             "default_timezone": "America/Toronto",
             "default_retention_years": 7,
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -88,7 +88,7 @@ async def register(data: UserRegister):
             "id": str(uuid.uuid4()),
             "practice_id": practice_id,
             "stripe_customer_id": f"cus_mock_{practice_id[:8]}",
-            "plan": "starter",
+            "plan": "basic",
             "status": "active",
             "created_at": datetime.now(timezone.utc).isoformat(),
         })

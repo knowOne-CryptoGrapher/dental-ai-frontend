@@ -25,6 +25,8 @@ import SuperAdminLLMPage from "./pages/SuperAdminLLMPage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 import TermsPage from "./pages/TermsPage";
 import InvitePage from "./pages/InvitePage";
+import KnowledgeBasePage from "./pages/KnowledgeBasePage";
+import RoutingRulesPage from "./pages/RoutingRulesPage";
 import ErrorBoundary from "./components/ErrorBoundary";
 import axios from "axios";
 
@@ -155,6 +157,8 @@ function AppContent() {
       <Route path="/calendar" element={<PracticePage component={CalendarPage} />} />
       <Route path="/call-logs" element={<PracticePage component={CallLogsPage} />} />
       <Route path="/analytics" element={<PracticePage component={AnalyticsPage} />} />
+      <Route path="/knowledge" element={<PracticePage component={KnowledgeBasePage} />} />
+      <Route path="/routing-rules" element={<PracticePage component={RoutingRulesPage} />} />
       <Route path="/settings" element={<PracticePage component={SettingsPage} />} />
       <Route path="/practice-settings" element={<PracticePage component={PracticeSettingsPage} />} />
       <Route path="/insurance" element={<PracticePage component={InsurancePage} />} />

@@ -28,6 +28,9 @@ groq==1.2.0
 # Payments
 stripe==15.1.0
 
+# PDF generation
+reportlab>=4.0.0
+
 # Config
 python-dotenv==1.2.2
 

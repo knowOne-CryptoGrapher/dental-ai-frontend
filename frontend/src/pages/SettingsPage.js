@@ -9,9 +9,38 @@ import { Switch } from '../components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import {
   Mic, Phone, Shield, Database, Clock, Save, Loader2,
-  RefreshCw, FileText, CheckCircle2
+  RefreshCw, FileText, CheckCircle2, Brain, Zap, Sparkles,
 } from 'lucide-react';
 import { api } from '../config/api';
+import { useFeatures } from '../hooks/useFeatures';
+import UpgradePage from '../components/UpgradePage';
+
+const MODEL_OPTIONS = [
+  {
+    id: 'gpt-4o-mini',
+    icon: Zap,
+    label: 'GPT-4o mini',
+    description: 'Fast and efficient. Best for routine inquiries.',
+    badge: 'Default',
+    badgeClass: 'bg-gray-100 text-gray-600',
+  },
+  {
+    id: 'gpt-4o',
+    icon: Brain,
+    label: 'GPT-4o',
+    description: 'More capable. Best for complex insurance and clinical queries.',
+    badge: 'Recommended',
+    badgeClass: 'bg-teal-50 text-teal-700',
+  },
+  {
+    id: 'claude-sonnet',
+    icon: Sparkles,
+    label: 'Claude Sonnet',
+    description: 'Advanced reasoning. Best for nuanced patient conversations.',
+    badge: 'Premium',
+    badgeClass: 'bg-violet-50 text-violet-700',
+  },
+];
 
 const voiceModels = [
   { id: 'Polly.Joanna', name: 'Joanna', desc: 'Female, warm & professional', lang: 'en-US' },
@@ -24,6 +53,7 @@ const voiceModels = [
 
 export default function SettingsPage({ useMock = false }) {
   const { isAdmin, canViewAudit } = useAuth();
+  const { has, featuresLoading } = useFeatures();
   const [activeTab, setActiveTab] = useState('voice');
   const [voiceModel, setVoiceModel] = useState('Polly.Joanna');
   const [retentionYears, setRetentionYears] = useState(7);
@@ -32,10 +62,19 @@ export default function SettingsPage({ useMock = false }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [selectedModel, setSelectedModel] = useState(null);
+  const [modelSaving, setModelSaving] = useState(false);
+  const [modelSaved, setModelSaved] = useState(false);
+  const [modelError, setModelError] = useState('');
 
   useEffect(() => {
     fetchSettings();
   }, []);
+
+  useEffect(() => {
+    if (featuresLoading || !has('custom_model_selection')) return;
+    fetchModelPreference();
+  }, [featuresLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchSettings = async () => {
     if (useMock) return;
@@ -53,6 +92,33 @@ export default function SettingsPage({ useMock = false }) {
       setAutoArchive(retentionRes.data.auto_archive_enabled || false);
     } catch (err) {
       console.error('Settings fetch error:', err);
+    }
+  };
+
+  const fetchModelPreference = async () => {
+    try {
+      const res = await api.get('/settings/model');
+      setSelectedModel(res.data.model_preference ?? null);
+    } catch {
+      // fail silently — feature gate error or network issue
+    }
+  };
+
+  const saveModelPreference = async () => {
+    if (!isAdmin) {
+      alert('Only administrators can modify AI model settings');
+      return;
+    }
+    setModelSaving(true);
+    setModelError('');
+    try {
+      await api.put('/settings/model', { model_preference: selectedModel });
+      setModelSaved(true);
+      setTimeout(() => setModelSaved(false), 2000);
+    } catch (err) {
+      setModelError(err.response?.data?.detail || 'Failed to save model preference.');
+    } finally {
+      setModelSaving(false);
     }
   };
 
@@ -161,58 +227,65 @@ export default function SettingsPage({ useMock = false }) {
           <TabsTrigger value="audit" className="gap-1.5" onClick={fetchAuditLogs}>
             <Shield className="w-4 h-4" />Audit Logs
           </TabsTrigger>
+          <TabsTrigger value="ai-model" className="gap-1.5">
+            <Brain className="w-4 h-4" />AI Model
+          </TabsTrigger>
         </TabsList>
 
         {/* Voice Settings */}
         <TabsContent value="voice" className="mt-4">
-          <Card className="border-gray-200/80">
-            <CardHeader>
-              <CardTitle className="text-base">Voice Model</CardTitle>
-              <CardDescription>Select the AI voice for phone calls</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {voiceModels.map(v => (
-                  <button
-                    key={v.id}
-                    onClick={() => setVoiceModel(v.id)}
-                    className={`p-3 rounded-lg border text-left transition-all ${
-                      voiceModel === v.id
-                        ? 'border-teal-300 bg-teal-50/50 ring-1 ring-teal-200'
-                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                    }`}
+          {featuresLoading ? null : !has('custom_voice') ? (
+            <UpgradePage feature="Custom Voice" requiredTier="Enterprise" />
+          ) : (
+            <Card className="border-gray-200/80">
+              <CardHeader>
+                <CardTitle className="text-base">Voice Model</CardTitle>
+                <CardDescription>Select the AI voice for phone calls</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {voiceModels.map(v => (
+                    <button
+                      key={v.id}
+                      onClick={() => setVoiceModel(v.id)}
+                      className={`p-3 rounded-lg border text-left transition-all ${
+                        voiceModel === v.id
+                          ? 'border-teal-300 bg-teal-50/50 ring-1 ring-teal-200'
+                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-900">{v.name}</span>
+                        {voiceModel === v.id && <CheckCircle2 className="w-4 h-4 text-teal-600" />}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5">{v.desc}</p>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2 pt-2">
+                  <Button
+                    onClick={saveVoice}
+                    className="bg-teal-600 hover:bg-teal-700"
+                    disabled={saving || !isAdmin}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-900">{v.name}</span>
-                      {voiceModel === v.id && <CheckCircle2 className="w-4 h-4 text-teal-600" />}
-                    </div>
-                    <p className="text-xs text-gray-500 mt-0.5">{v.desc}</p>
-                  </button>
-                ))}
-              </div>
+                    {saving ? (
+                      <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                    ) : (
+                      <Save className="w-4 h-4 mr-1" />
+                    )}
+                    {saved ? 'Saved!' : 'Save'}
+                  </Button>
 
-              <div className="flex items-center gap-2 pt-2">
-                <Button
-                  onClick={saveVoice}
-                  className="bg-teal-600 hover:bg-teal-700"
-                  disabled={saving || !isAdmin}
-                >
-                  {saving ? (
-                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                  ) : (
-                    <Save className="w-4 h-4 mr-1" />
+                  {!isAdmin && (
+                    <p className="text-xs text-amber-600">
+                      Admin access required to modify voice settings
+                    </p>
                   )}
-                  {saved ? 'Saved!' : 'Save'}
-                </Button>
-
-                {!isAdmin && (
-                  <p className="text-xs text-amber-600">
-                    Admin access required to modify voice settings
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* Data Retention */}
@@ -331,6 +404,76 @@ export default function SettingsPage({ useMock = false }) {
             </CardContent>
           </Card>
         </TabsContent>
+        {/* AI Model */}
+        <TabsContent value="ai-model" className="mt-4">
+          {featuresLoading ? null : !has('custom_model_selection') ? (
+            <UpgradePage feature="Custom Model Selection" requiredTier="Elite" />
+          ) : (
+            <Card className="border-gray-200/80">
+              <CardHeader>
+                <CardTitle className="text-base">AI Model</CardTitle>
+                <CardDescription>Choose the LLM that powers your voice AI receptionist</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {MODEL_OPTIONS.map(opt => {
+                    const Icon = opt.icon;
+                    const isSelected = selectedModel === opt.id
+                      || (selectedModel === null && opt.id === 'gpt-4o-mini');
+                    return (
+                      <button
+                        key={opt.id}
+                        onClick={() => setSelectedModel(opt.id === 'gpt-4o-mini' ? null : opt.id)}
+                        className={`p-3 rounded-lg border text-left transition-all ${
+                          isSelected
+                            ? 'border-teal-300 bg-teal-50/50 ring-1 ring-teal-200'
+                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center gap-2">
+                            <Icon className={`w-4 h-4 ${isSelected ? 'text-teal-600' : 'text-gray-400'}`} />
+                            <span className="text-sm font-medium text-gray-900">{opt.label}</span>
+                          </div>
+                          {isSelected && <CheckCircle2 className="w-4 h-4 text-teal-600 shrink-0" />}
+                        </div>
+                        <p className="text-xs text-gray-500 mb-2">{opt.description}</p>
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${opt.badgeClass}`}>
+                          {opt.badge}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {modelError && (
+                  <p className="text-xs text-red-600">{modelError}</p>
+                )}
+
+                <div className="flex items-center gap-2 pt-2">
+                  <Button
+                    onClick={saveModelPreference}
+                    className="bg-teal-600 hover:bg-teal-700"
+                    disabled={modelSaving || !isAdmin}
+                  >
+                    {modelSaving ? (
+                      <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                    ) : (
+                      <Save className="w-4 h-4 mr-1" />
+                    )}
+                    {modelSaved ? 'Saved!' : 'Save'}
+                  </Button>
+                  {!isAdmin && (
+                    <p className="text-xs text-amber-600">
+                      Admin access required to modify AI model settings
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
       </Tabs>
     </div>
   );

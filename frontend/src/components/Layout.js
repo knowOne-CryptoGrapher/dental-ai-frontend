@@ -4,17 +4,19 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Users, Calendar as CalendarIcon, Phone, BarChart3, Settings,
   LogOut, Bell, Menu, Stethoscope, Building2, UserCog, Shield,
-  FileText, CreditCard, MapPin, Briefcase
+  FileText, CreditCard, MapPin, Briefcase, Lock, BookOpen, GitBranch,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import ImpersonationBanner from './ImpersonationBanner';
 import { Toaster } from './ui/sonner';
 import { useFeatures } from '../hooks/useFeatures';
+import { useUpgradePrompt } from '../hooks/useUpgradePrompt';
 
 export default function Layout({ children, notifications = [], onNotificationRead }) {
   const { user, logout, isAdmin, isProvider, isAuditor, canViewAudit } = useAuth();
-  const { has, plan_name, billing_status } = useFeatures();
+  const { has, plan_name, billing_status, featuresLoading } = useFeatures();
+  const { showUpgradePrompt, UpgradeModalWrapper } = useUpgradePrompt();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -39,15 +41,51 @@ export default function Layout({ children, notifications = [], onNotificationRea
       );
     }
 
-    // Insurance (admin/staff) — gated by plan feature
-    if ((isAdmin || !isAuditor) && has('insurance')) {
-      items.push({ path: '/insurance', label: 'Insurance', icon: FileText, section: 'Main' });
+    // Insurance — visible to all non-auditors; locked (shows upgrade prompt) when plan lacks it
+    if (!isAuditor) {
+      items.push({
+        path: '/insurance',
+        label: 'Insurance',
+        icon: FileText,
+        section: 'Main',
+        locked: !featuresLoading && !has('insurance'),
+        upgradeFeature: 'Insurance',
+        upgradeTier: 'Professional',
+      });
     }
 
-    // Analytics — gated by plan feature
-    if (has('analytics')) {
-      items.push({ path: '/analytics', label: 'Analytics', icon: BarChart3, section: 'Main' });
-    }
+    // Analytics — always visible; locked (shows upgrade prompt) when plan lacks it
+    items.push({
+      path: '/analytics',
+      label: 'Analytics',
+      icon: BarChart3,
+      section: 'Main',
+      locked: !featuresLoading && !has('analytics'),
+      upgradeFeature: 'Analytics',
+      upgradeTier: 'Professional',
+    });
+
+    // Knowledge Base — always visible; locked for non-Enterprise plans
+    items.push({
+      path: '/knowledge',
+      label: 'Knowledge Base',
+      icon: BookOpen,
+      section: 'Main',
+      locked: !featuresLoading && !has('knowledge_base'),
+      upgradeFeature: 'Knowledge Base',
+      upgradeTier: 'Enterprise',
+    });
+
+    // Routing Rules — always visible; locked for non-Enterprise plans
+    items.push({
+      path: '/routing-rules',
+      label: 'Routing Rules',
+      icon: GitBranch,
+      section: 'Main',
+      locked: !featuresLoading && !has('custom_routing_rules'),
+      upgradeFeature: 'Custom Routing Rules',
+      upgradeTier: 'Enterprise',
+    });
 
     // Admin: Practice Management
     if (isAdmin) {
@@ -58,13 +96,19 @@ export default function Layout({ children, notifications = [], onNotificationRea
       );
     }
 
-    // Audit (admin/auditor) — gated by plan feature
-    if (canViewAudit && has('audit_log')) {
+    // Audit (admin/auditor)
+    if (canViewAudit) {
       items.push({ path: '/audit', label: 'Audit Logs', icon: Shield, section: 'Compliance' });
     }
 
-    // Settings
-    items.push({ path: '/settings', label: 'Settings', icon: Settings, section: 'Settings' });
+    // Settings — Elite badge when custom_model_selection is unlocked (discovery hint only)
+    items.push({
+      path: '/settings',
+      label: 'Settings',
+      icon: Settings,
+      section: 'Settings',
+      eliteBadge: !featuresLoading && has('custom_model_selection'),
+    });
 
     // Auditor-only pages
     if (isAuditor) {
@@ -77,7 +121,7 @@ export default function Layout({ children, notifications = [], onNotificationRea
     }
 
     return items;
-  }, [isAdmin, isAuditor, canViewAudit, has]);
+  }, [isAdmin, isAuditor, canViewAudit, has, featuresLoading]);
 
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
@@ -140,12 +184,30 @@ export default function Layout({ children, notifications = [], onNotificationRea
                 return (
                   <button
                     key={item.path + item.label}
-                    onClick={() => navigate(item.path)}
+                    onClick={() =>
+                      item.locked
+                        ? showUpgradePrompt(item.upgradeFeature, item.upgradeTier)
+                        : navigate(item.path)
+                    }
+                    aria-label={item.locked ? `${item.label} — upgrade required` : item.label}
                     className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors
-                      ${isActive ? 'bg-teal-50 text-teal-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                      ${isActive ? 'bg-teal-50 text-teal-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}
+                      ${item.locked ? 'opacity-60' : ''}`}
                   >
                     <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-teal-600' : 'text-gray-400'}`} />
-                    {sidebarOpen && <span className="truncate">{item.label}</span>}
+                    {sidebarOpen && (
+                      <>
+                        <span className="truncate flex-1">{item.label}</span>
+                        {item.eliteBadge && (
+                          <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-700 shrink-0">
+                            Elite
+                          </span>
+                        )}
+                        {item.locked && (
+                          <Lock className="w-3 h-3 shrink-0 text-gray-300" aria-hidden="true" />
+                        )}
+                      </>
+                    )}
                   </button>
                 );
               })}
@@ -266,6 +328,7 @@ export default function Layout({ children, notifications = [], onNotificationRea
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">{children}</main>
       </div>
+      {UpgradeModalWrapper}
       <Toaster position="top-right" richColors closeButton />
     </div>
   );

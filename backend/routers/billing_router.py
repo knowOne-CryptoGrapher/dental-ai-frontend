@@ -15,13 +15,15 @@ Architecture:
   • Webhook handler at /api/webhook/stripe keeps practice billing_status
     and subscription_plan in sync with Stripe
 """
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request, Response
 import os
 import uuid
 import logging
+from io import BytesIO
 from datetime import datetime, timezone
 
-from auth import get_db, require_role, log_audit_event
+from auth import get_db, require_role, get_current_user, log_audit_event
+from dependencies import require_feature
 from plans import PLANS, get_plan, list_plans, DEFAULT_PLAN_ID
 
 import stripe as stripe_sdk  # raw Stripe SDK
@@ -106,6 +108,47 @@ async def get_usage(current_user: dict = Depends(require_role("admin"))):
       "locations": {"used": locations, "max": plan.limits.locations_max},
       "claims_submitted": claims,
     },
+  }
+
+
+@router.get("/usage-stats")
+async def get_usage_stats(current_user: dict = Depends(get_current_user)):
+  """Detailed usage vs plan limits for the authenticated practice."""
+  db = get_db()
+  practice_id = current_user.get("practice_id")
+  if not practice_id:
+    raise HTTPException(status_code=400, detail="No practice associated with this user.")
+
+  practice = await db.practices.find_one(
+    {"id": practice_id}, {"_id": 0, "subscription_plan": 1}
+  ) or {}
+  plan = get_plan(practice.get("subscription_plan"))
+
+  now = datetime.now(timezone.utc)
+  month_start = datetime(now.year, now.month, 1, tzinfo=timezone.utc).isoformat()
+
+  calls = await db.call_logs.count_documents({
+    "practice_id": practice_id,
+    "start_time": {"$gte": month_start},
+  })
+  providers = await db.providers.count_documents({
+    "practice_id": practice_id,
+    "$or": [{"is_active": True}, {"active": True}],
+  })
+  locations = await db.locations.count_documents({
+    "practice_id": practice_id,
+    "is_active": True,
+  })
+  users = await db.users.count_documents({
+    "practice_id": practice_id,
+    "is_active": True,
+  })
+
+  return {
+    "calls":     {"used": calls,     "limit": plan.limits.calls_per_month},
+    "providers": {"used": providers, "limit": plan.limits.providers_max},
+    "locations": {"used": locations, "limit": plan.limits.locations_max},
+    "users":     {"used": users,     "limit": plan.limits.users_max},
   }
 
 
@@ -471,6 +514,200 @@ async def create_portal_session(
   except Exception as e:
     logger.error(f"Stripe portal session error: {e}")
     raise HTTPException(status_code=502, detail=f"Stripe error: {e}")
+
+
+# ──────────────────────────────────────────────────────────────────────
+# BAA download (Elite only)
+# ──────────────────────────────────────────────────────────────────────
+
+
+def _build_baa_pdf(practice_name: str) -> bytes:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=letter,
+        rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=72,
+    )
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle(
+        "BAATitle", parent=styles["Heading1"],
+        fontSize=18, spaceAfter=4, alignment=TA_CENTER,
+        textColor=colors.HexColor("#1a1a2e"),
+    )
+    subtitle_style = ParagraphStyle(
+        "BAASubtitle", parent=styles["Normal"],
+        fontSize=11, spaceAfter=16, alignment=TA_CENTER,
+        textColor=colors.HexColor("#4a5568"),
+    )
+    body_style = ParagraphStyle(
+        "BAABody", parent=styles["Normal"],
+        fontSize=10, spaceAfter=8, leading=14, alignment=TA_JUSTIFY,
+    )
+    section_style = ParagraphStyle(
+        "BAASection", parent=styles["Heading2"],
+        fontSize=11, spaceBefore=16, spaceAfter=6,
+        textColor=colors.HexColor("#1a1a2e"),
+    )
+    sig_style = ParagraphStyle(
+        "BAASig", parent=styles["Normal"],
+        fontSize=10, leading=20,
+    )
+    hr = HRFlowable(width="100%", thickness=1, color=colors.HexColor("#e2e8f0"), spaceAfter=16)
+
+    story = [
+        Paragraph("Business Associate Agreement", title_style),
+        Paragraph("HIPAA / PIPEDA Compliance — Dental AI Platform", subtitle_style),
+        hr,
+        Paragraph(
+            f'This Business Associate Agreement ("Agreement") is entered into between '
+            f'<b>{practice_name}</b> ("Covered Entity") and Dental AI Platform Inc. '
+            f'("Business Associate") as of <b>[DATE]</b>.',
+            body_style,
+        ),
+        Paragraph("1. DEFINITIONS", section_style),
+        Paragraph(
+            '"Protected Health Information" or "PHI" means any information, whether oral or '
+            "recorded in any form or medium, that is created or received by Business Associate "
+            "from or on behalf of Covered Entity that relates to the past, present, or future "
+            "physical or mental health or condition of an individual; the provision of health "
+            "care to an individual; or the payment for health care, as defined under the Health "
+            "Insurance Portability and Accountability Act of 1996 (HIPAA) and the Personal "
+            "Information Protection and Electronic Documents Act (PIPEDA). "
+            '"Business Associate" means an entity that performs functions or activities on '
+            "behalf of a Covered Entity that involve the use or disclosure of PHI.",
+            body_style,
+        ),
+        Paragraph("2. OBLIGATIONS OF BUSINESS ASSOCIATE", section_style),
+        Paragraph(
+            "Business Associate agrees to: (a) not use or disclose PHI other than as "
+            "permitted or required by this Agreement or as required by law; (b) implement "
+            "appropriate administrative, physical, and technical safeguards to prevent "
+            "unauthorized use or disclosure of PHI; (c) ensure that any subcontractors that "
+            "create, receive, maintain, or transmit PHI on behalf of Business Associate agree "
+            "to the same restrictions and conditions that apply to Business Associate; "
+            "(d) make its internal practices, books, and records relating to PHI available to "
+            "the Secretary of the Department of Health and Human Services for purposes of "
+            "determining compliance with HIPAA.",
+            body_style,
+        ),
+        Paragraph("3. PERMITTED USES AND DISCLOSURES", section_style),
+        Paragraph(
+            "Business Associate may use or disclose PHI only as necessary to perform services "
+            "described in the underlying service agreement, or as required by law. Business "
+            "Associate may use PHI for its proper management and administration or to carry "
+            "out legal responsibilities, provided that disclosures are required by law or "
+            "Business Associate obtains reasonable written assurances of confidentiality from "
+            "the recipient. Business Associate shall not sell PHI or use PHI for marketing "
+            "purposes without explicit written authorization from the Covered Entity.",
+            body_style,
+        ),
+        Paragraph("4. SAFEGUARDS", section_style),
+        Paragraph(
+            "Business Associate shall implement and maintain appropriate administrative, "
+            "physical, and technical safeguards to protect the confidentiality, integrity, "
+            "and availability of electronic PHI as required by the HIPAA Security Rule "
+            "(45 CFR Part 164, Subpart C) and applicable PIPEDA requirements. This includes "
+            "encryption of PHI at rest and in transit, role-based access controls, access "
+            "logging and monitoring, and regional data residency enforcement in accordance "
+            "with applicable Canadian provincial and federal law. Business Associate shall "
+            "conduct annual security risk assessments and remediate identified risks promptly.",
+            body_style,
+        ),
+        Paragraph("5. REPORTING", section_style),
+        Paragraph(
+            "Business Associate shall report to Covered Entity any use or disclosure of PHI "
+            "not provided for by this Agreement of which it becomes aware, including breaches "
+            "of unsecured PHI as required by the HIPAA Breach Notification Rule "
+            "(45 CFR §§ 164.400–414) and any applicable PIPEDA breach of security safeguards "
+            "requirements. Notification shall be provided without unreasonable delay and in "
+            "no case later than sixty (60) calendar days after discovery of the breach, and "
+            "shall include the nature of the breach, the PHI involved, and steps taken to "
+            "mitigate harm.",
+            body_style,
+        ),
+        Paragraph("6. TERM AND TERMINATION", section_style),
+        Paragraph(
+            "This Agreement shall be effective as of the date first written above and shall "
+            "remain in effect until terminated. Either party may terminate this Agreement for "
+            "cause upon thirty (30) days written notice if the other party materially breaches "
+            "any provision. Upon termination, Business Associate shall return or destroy all "
+            "PHI received from or created on behalf of Covered Entity. If return or destruction "
+            "is infeasible, Business Associate shall extend the protections of this Agreement "
+            "to such PHI and limit further uses and disclosures to those purposes that make "
+            "return or destruction infeasible.",
+            body_style,
+        ),
+        Paragraph("7. MISCELLANEOUS", section_style),
+        Paragraph(
+            "This Agreement shall be governed by the laws of the Province of Ontario and the "
+            "federal laws of Canada applicable therein. This Agreement constitutes the entire "
+            "agreement between the parties with respect to the subject matter hereof and "
+            "supersedes all prior agreements, understandings, and discussions. Any amendment "
+            "must be in writing signed by both parties. If any provision of this Agreement is "
+            "found unenforceable, the remaining provisions shall continue in full force and "
+            "effect. This Agreement may be executed in counterparts, each of which shall be "
+            "deemed an original.",
+            body_style,
+        ),
+        Spacer(1, 24),
+        HRFlowable(width="100%", thickness=1, color=colors.HexColor("#e2e8f0"), spaceAfter=16),
+        Paragraph(
+            "By signing below, the parties agree to be bound by the terms and conditions "
+            "of this Agreement.",
+            body_style,
+        ),
+        Spacer(1, 12),
+        Paragraph(
+            f"<b>Covered Entity:</b> {practice_name}<br/>"
+            "<b>Authorized Signature:</b> [AUTHORIZED SIGNATURE]<br/>"
+            "<b>Date:</b> [DATE]",
+            sig_style,
+        ),
+        Spacer(1, 20),
+        Paragraph(
+            "<b>Business Associate:</b> Dental AI Platform Inc.<br/>"
+            "<b>Authorized Signature:</b> ____________________<br/>"
+            "<b>Date:</b> ____________________",
+            sig_style,
+        ),
+    ]
+
+    def _footer(canvas, doc):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 8)
+        canvas.setFillColor(colors.HexColor("#718096"))
+        canvas.drawCentredString(letter[0] / 2, 36, "Dental AI Platform — Confidential")
+        canvas.restoreState()
+
+    doc.build(story, onFirstPage=_footer, onLaterPages=_footer)
+    return buf.getvalue()
+
+
+@router.get("/baa")
+async def download_baa(
+    current_user: dict = Depends(get_current_user),
+    _gate: None = Depends(require_feature("baa_available")),
+):
+    """Returns the Business Associate Agreement as a downloadable PDF. Elite plan only."""
+    db = get_db()
+    practice = await db.practices.find_one(
+        {"id": current_user.get("practice_id")}, {"_id": 0, "name": 1}
+    ) or {}
+    practice_name = practice.get("name") or "[PRACTICE NAME]"
+
+    pdf_bytes = _build_baa_pdf(practice_name)
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="BAA-DentalAI.pdf"'},
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────

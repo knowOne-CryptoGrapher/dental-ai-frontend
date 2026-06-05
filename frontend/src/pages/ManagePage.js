@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useFeatures } from '../hooks/useFeatures';
+import { useUpgradePrompt } from '../hooks/useUpgradePrompt';
 import { api } from '../config/api';
 
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -27,6 +29,8 @@ import {
 
 export default function ManagePage() {
   const { user, isAdmin } = useAuth();
+  const { has } = useFeatures();
+  const { showUpgradePrompt, UpgradeModalWrapper } = useUpgradePrompt();
 
   const [activeTab, setActiveTab] = useState('locations');
   const [locations, setLocations] = useState([]);
@@ -289,7 +293,11 @@ export default function ManagePage() {
             </p>
             <Button
               className="bg-teal-600 hover:bg-teal-700"
-              onClick={() => openLocationDialog()}
+              onClick={() =>
+                has('multi_location')
+                  ? openLocationDialog()
+                  : showUpgradePrompt('Multiple Locations', 'Professional')
+              }
             >
               <Plus className="w-4 h-4 mr-1" /> Add Location
             </Button>
@@ -1172,6 +1180,7 @@ export default function ManagePage() {
           )}
         </DialogContent>
       </Dialog>
+      {UpgradeModalWrapper}
     </div>
   );
 }

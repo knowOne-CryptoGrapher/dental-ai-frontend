@@ -1,20 +1,76 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useFeatures } from '../hooks/useFeatures';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import {
   CreditCard, Check, Phone, MapPin, Briefcase, FileText, Loader2,
-  ExternalLink, AlertCircle, Sparkles,
+  ExternalLink, AlertCircle, Sparkles, Headphones, ShieldCheck, Download,
+  Brain, ArrowRight, LayoutGrid, X, Users,
 } from 'lucide-react';
+import ComparePlansModal from '../components/ComparePlansModal';
 
 const POLL_INTERVAL_MS = 2000;
 const POLL_MAX_ATTEMPTS = 12;
 
+const METRIC_LABELS = {
+  calls:     'Voice Call',
+  providers: 'Provider',
+  locations: 'Location',
+  users:     'User',
+};
+
+const USAGE_METRICS = [
+  { key: 'calls',     label: 'Voice Calls this month' },
+  { key: 'providers', label: 'Providers'               },
+  { key: 'locations', label: 'Locations'               },
+  { key: 'users',     label: 'Users'                   },
+];
+
+const PLAN_FEATURE_COPY = {
+  basic: {
+    prefix: null,
+    highlights: [
+      'Voice AI',
+      'Appointments',
+      'Patients',
+      'Calendar',
+      'Call Logs',
+      'Audit Logs',
+    ],
+  },
+  professional: {
+    prefix: 'Everything in Basic, plus:',
+    highlights: [
+      'Analytics',
+      'Insurance / CDAnet',
+      'Multi-Location',
+    ],
+  },
+  enterprise: {
+    prefix: 'Everything in Professional, plus:',
+    highlights: [
+      'Custom Voice',
+      'Knowledge Base',
+      'Routing Rules',
+    ],
+  },
+  elite: {
+    prefix: 'Everything in Enterprise, plus:',
+    highlights: [
+      'Dedicated Support SLA',
+      'HIPAA / PIPEDA BAA',
+      'Custom Model Selection',
+    ],
+  },
+};
+
 export default function BillingPage() {
   const { axiosAuth } = useAuth();
+  const { has, featuresLoading } = useFeatures();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [plans, setPlans] = useState([]);
@@ -23,20 +79,27 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [busyPlan, setBusyPlan] = useState(null);
   const [openingPortal, setOpeningPortal] = useState(false);
+  const [baaLoading, setBaaLoading] = useState(false);
+  const [baaError, setBaaError] = useState('');
+  const [comparePlansOpen, setComparePlansOpen] = useState(false);
+  const [usageStats, setUsageStats] = useState(null);
+  const [usageBannerDismissed, setUsageBannerDismissed] = useState(false);
 
   const [returnState, setReturnState] = useState(null);
 
   const fetchAll = useCallback(async () => {
     try {
       const api = axiosAuth();
-      const [planRes, usageRes, invRes] = await Promise.all([
+      const [planRes, usageRes, invRes, statsRes] = await Promise.all([
         api.get('/billing/plans'),
         api.get('/billing/usage'),
         api.get('/billing/invoices'),
+        api.get('/billing/usage-stats').catch(() => ({ data: null })),
       ]);
       setPlans(planRes.data || []);
       setUsage(usageRes.data);
       setInvoices(invRes.data || []);
+      setUsageStats(statsRes.data);
     } catch (e) {
       console.error(e);
       toast.error('Failed to load billing info');
@@ -116,6 +179,26 @@ export default function BillingPage() {
     }
   };
 
+  const downloadBaa = async () => {
+    setBaaLoading(true);
+    setBaaError('');
+    try {
+      const response = await axiosAuth().get('/billing/baa', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'BAA-DentalAI.pdf');
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch {
+      setBaaError('Failed to download BAA. Please try again.');
+    } finally {
+      setBaaLoading(false);
+    }
+  };
+
   const openPortal = async () => {
     setOpeningPortal(true);
     try {
@@ -141,6 +224,11 @@ export default function BillingPage() {
 
   const hasCustomer = !!usage?.stripe_customer_id;
   const billingStatus = usage?.billing_status || 'active';
+  const atLimitMetric = usageStats
+    ? ['calls', 'providers', 'locations', 'users'].find(
+        k => (usageStats[k]?.used ?? 0) >= (usageStats[k]?.limit ?? Infinity)
+      )
+    : null;
 
   return (
     <div className="space-y-6 max-w-5xl" data-testid="billing-page">
@@ -151,18 +239,29 @@ export default function BillingPage() {
             Manage your subscription, view invoices, and update your payment method.
           </p>
         </div>
-        {hasCustomer && (
+        <div className="flex items-center gap-2 shrink-0">
           <Button
-            data-testid="manage-billing-btn"
-            onClick={openPortal}
-            disabled={openingPortal}
             variant="outline"
-            className="border-teal-200 text-teal-700 hover:bg-teal-50"
+            size="sm"
+            onClick={() => setComparePlansOpen(true)}
+            className="border-gray-200 text-gray-600 hover:bg-gray-50"
           >
-            {openingPortal ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <ExternalLink className="w-4 h-4 mr-1.5" />}
-            Manage Billing
+            <LayoutGrid className="w-4 h-4 mr-1.5" />
+            Compare Plans
           </Button>
-        )}
+          {hasCustomer && (
+            <Button
+              data-testid="manage-billing-btn"
+              onClick={openPortal}
+              disabled={openingPortal}
+              variant="outline"
+              className="border-teal-200 text-teal-700 hover:bg-teal-50"
+            >
+              {openingPortal ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <ExternalLink className="w-4 h-4 mr-1.5" />}
+              Manage Billing
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Return-from-Stripe banners */}
@@ -197,6 +296,36 @@ export default function BillingPage() {
           <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
           <div className="text-sm text-red-900">
             Your last payment failed. Click <strong>Manage Billing</strong> to update your card.
+          </div>
+        </div>
+      )}
+
+      {/* Limit reached banner */}
+      {!usageBannerDismissed && atLimitMetric && (
+        <div className="flex items-center justify-between gap-4 p-4 rounded-lg bg-red-50 border border-red-200">
+          <div className="flex items-center gap-3 min-w-0">
+            <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+            <p className="text-sm text-red-900">
+              You've reached your <strong>{METRIC_LABELS[atLimitMetric]}</strong> limit.{' '}
+              Upgrade your plan to continue growing.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-red-200 text-red-700 hover:bg-red-50"
+              onClick={() => setComparePlansOpen(true)}
+            >
+              View Plans
+            </Button>
+            <button
+              onClick={() => setUsageBannerDismissed(true)}
+              className="p-1 text-red-400 hover:text-red-600 transition-colors"
+              aria-label="Dismiss"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
       )}
@@ -243,6 +372,103 @@ export default function BillingPage() {
         </Card>
       )}
 
+      {/* Plan Usage */}
+      {usageStats && (
+        <Card className="border-gray-200/80">
+          <CardContent className="p-5">
+            <h2 className="text-sm font-semibold text-gray-700 mb-4">Plan Usage</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {USAGE_METRICS.map(({ key, label }) => {
+                const stat = usageStats[key];
+                if (!stat) return null;
+                const pct = stat.limit > 0 ? Math.min((stat.used / stat.limit) * 100, 100) : 0;
+                const isAtLimit = stat.used >= stat.limit;
+                const isWarning = !isAtLimit && pct >= 80;
+                const barColor  = isAtLimit ? 'bg-red-500'   : isWarning ? 'bg-amber-400' : 'bg-teal-500';
+                const trackColor = isAtLimit ? 'bg-red-100'  : isWarning ? 'bg-amber-100' : 'bg-gray-100';
+                return (
+                  <div key={key}>
+                    <div className="flex items-center justify-between mb-1.5 gap-2">
+                      <span className="text-[13px] text-gray-600">{label}</span>
+                      {isAtLimit && (
+                        <button
+                          onClick={() => setComparePlansOpen(true)}
+                          className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700 hover:bg-red-200 transition-colors shrink-0"
+                        >
+                          Limit reached — upgrade to get more
+                        </button>
+                      )}
+                      {isWarning && (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">
+                          Approaching limit
+                        </span>
+                      )}
+                    </div>
+                    <div className={`w-full ${trackColor} rounded-full h-2 overflow-hidden`}>
+                      <div
+                        className={`h-full ${barColor} rounded-full transition-all duration-500`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <p className="text-[11px] text-gray-400 mt-1.5">
+                      {stat.used.toLocaleString()} of {stat.limit.toLocaleString()} used
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Elite upsell — shown to non-Elite plans only */}
+      {usage && usage.plan !== 'elite' && (
+        <div className="rounded-xl border border-[#D4AF37]/40 bg-gradient-to-b from-yellow-50/60 to-white p-5">
+          <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
+            <div>
+              <h2 className="text-base font-bold text-gray-900">Unlock Elite Features</h2>
+              <p className="text-sm text-gray-500 mt-0.5">Everything in Enterprise, plus:</p>
+            </div>
+            <Button
+              className="bg-[#D4AF37] hover:bg-[#b8962f] text-white gap-1.5 shrink-0"
+              onClick={() => { window.location.href = 'mailto:sales@dentalai.ca'; }}
+            >
+              Upgrade to Elite — $1,499/mo
+              <ArrowRight className="w-4 h-4" aria-hidden="true" />
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[
+              {
+                icon: Headphones,
+                title: 'Dedicated Support SLA',
+                description: '4-hour response SLA with a named CSM.',
+              },
+              {
+                icon: ShieldCheck,
+                title: 'HIPAA / PIPEDA BAA',
+                description: 'Downloadable Business Associate Agreement for full compliance.',
+              },
+              {
+                icon: Brain,
+                title: 'Custom Model Selection',
+                description: 'Choose GPT-4o, GPT-4o mini, or Claude Sonnet for your practice.',
+              },
+            ].map(({ icon: Icon, title, description }) => (
+              <div key={title} className="flex items-start gap-3 p-3 rounded-lg bg-white/80 border border-yellow-100">
+                <div className="w-8 h-8 rounded-full bg-yellow-50 flex items-center justify-center shrink-0">
+                  <Icon className="w-4 h-4 text-[#b8962f]" aria-hidden="true" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">{title}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Plans */}
       <div>
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Available plans</h2>
@@ -250,6 +476,7 @@ export default function BillingPage() {
           {plans.map(plan => {
             const isCurrent = usage?.plan === plan.id && hasCustomer;
             const isElite = plan.id === 'elite';
+            const isProfessional = plan.id === 'professional';
 
             return (
               <Card
@@ -267,9 +494,15 @@ export default function BillingPage() {
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-base font-bold text-gray-900">{plan.name}</h3>
 
-                    {isElite && (
+                    {isElite && !isCurrent && (
                       <Badge className="bg-yellow-100 text-yellow-800 text-[10px]">
-                        Most Advanced
+                        Most Powerful
+                      </Badge>
+                    )}
+
+                    {isProfessional && !isCurrent && (
+                      <Badge className="bg-teal-600 text-white text-[10px]">
+                        Most Popular
                       </Badge>
                     )}
 
@@ -290,7 +523,24 @@ export default function BillingPage() {
                     <li className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-teal-500" />{plan.calls_included} AI calls / mo</li>
                     <li className="flex items-center gap-2"><Briefcase className="w-3.5 h-3.5 text-teal-500" />{plan.providers_max} providers</li>
                     <li className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5 text-teal-500" />{plan.locations_max} locations</li>
+                    <li className="flex items-center gap-2"><Users className="w-3.5 h-3.5 text-teal-500" />{plan.users_max} users</li>
                   </ul>
+
+                  {PLAN_FEATURE_COPY[plan.id] && (
+                    <div className="mt-3 pt-3 border-t border-gray-100/80">
+                      {PLAN_FEATURE_COPY[plan.id].prefix && (
+                        <p className="text-[10px] text-gray-400 mb-1.5">{PLAN_FEATURE_COPY[plan.id].prefix}</p>
+                      )}
+                      <ul className="space-y-1">
+                        {PLAN_FEATURE_COPY[plan.id].highlights.map(f => (
+                          <li key={f} className="flex items-center gap-1.5 text-[11px] text-gray-600">
+                            <Check className="w-3 h-3 text-teal-500 shrink-0" />
+                            {f}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
 
                   {!plan.recurring && (
                     <p className="text-[10px] text-amber-700 mt-2">
@@ -323,6 +573,80 @@ export default function BillingPage() {
           })}
         </div>
       </div>
+
+      {/* Elite Features */}
+      {!featuresLoading && (has('dedicated_support') || has('baa_available')) && (
+        <div>
+          <h2 className="text-sm font-semibold text-gray-700 mb-3">Elite features</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            {has('dedicated_support') && (
+              <Card className="border-gray-200/80">
+                <CardContent className="p-5">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-full bg-teal-50 flex items-center justify-center shrink-0">
+                      <Headphones className="w-5 h-5 text-teal-600" aria-hidden="true" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-sm font-semibold text-gray-900">Dedicated Support</p>
+                        <Badge className="bg-teal-50 text-teal-700 text-[10px]">Elite</Badge>
+                      </div>
+                      <p className="text-xs text-gray-500 leading-relaxed">
+                        Priority response within 4 hours. Direct access to your named Customer
+                        Success Manager.
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {has('baa_available') && (
+              <Card className="border-gray-200/80">
+                <CardContent className="p-5">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-full bg-teal-50 flex items-center justify-center shrink-0">
+                      <ShieldCheck className="w-5 h-5 text-teal-600" aria-hidden="true" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-sm font-semibold text-gray-900">HIPAA / PIPEDA Compliance Package</p>
+                        <Badge className="bg-teal-50 text-teal-700 text-[10px]">Elite</Badge>
+                      </div>
+                      <p className="text-xs text-gray-500 leading-relaxed mb-3">
+                        Download your Business Associate Agreement. Required for HIPAA and PIPEDA
+                        compliance.
+                      </p>
+                      {baaError && (
+                        <p className="text-xs text-red-600 mb-2">{baaError}</p>
+                      )}
+                      <Button
+                        size="sm"
+                        className="bg-teal-600 hover:bg-teal-700"
+                        onClick={downloadBaa}
+                        disabled={baaLoading}
+                      >
+                        {baaLoading
+                          ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                          : <Download className="w-3.5 h-3.5 mr-1.5" />}
+                        Download BAA
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+          </div>
+        </div>
+      )}
+
+      <ComparePlansModal
+        isOpen={comparePlansOpen}
+        onClose={() => setComparePlansOpen(false)}
+        currentPlan={usage?.plan}
+      />
 
       {/* Invoices */}
       <Card className="border-gray-200/80">

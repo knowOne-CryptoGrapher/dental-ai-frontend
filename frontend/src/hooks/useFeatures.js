@@ -1,29 +1,36 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
-const ALL_FEATURES = {
-  voice_ai_calls: true, appointments: true, patients: true, call_logs: true,
-  calendar: true, analytics: true, insurance: true, audit_log: true,
-  multi_location: true, custom_voice: true, custom_routing_rules: true,
-  knowledge_base: true, sip_telephony: true,
+// All flags start false so gated UI never flashes open before the API resolves.
+// On successful fetch these are overwritten by the real plan values from the server.
+// On error they stay false (fail closed).
+const NO_FEATURES = {
+  voice_ai_calls: false, appointments: false, patients: false, call_logs: false,
+  calendar: false, analytics: false, insurance: false, audit_log: false,
+  multi_location: false, custom_voice: false, custom_routing_rules: false,
+  knowledge_base: false, sip_telephony: false,
 };
 
 /**
  * useFeatures — practice-portal hook that returns the current plan's
- * feature flags + limits. While loading, returns ALL features as
- * `true` so we don't flash "upgrade" prompts on first paint.
+ * feature flags + limits.
  *
- *   const { features, plan, billingStatus, loaded } = useFeatures();
+ *   const { features, plan, billingStatus, loaded, featuresLoading } = useFeatures();
+ *   if (featuresLoading) return <Skeleton />;
  *   if (!features.analytics) return <UpgradePrompt feature="analytics" />;
+ *
+ * featuresLoading is true until /billing/features resolves (success or error).
+ * On error, all feature flags remain false (fail closed, not fail open).
  */
 export function useFeatures() {
   const { axiosAuth, user } = useAuth();
   const [data, setData] = useState({
     plan_id: 'basic', plan_name: 'Basic',
     billing_status: 'active',
-    features: ALL_FEATURES,
+    features: NO_FEATURES,
     limits: {},
     loaded: false,
+    featuresLoading: true,
   });
 
   useEffect(() => {
@@ -32,10 +39,10 @@ export function useFeatures() {
     (async () => {
       try {
         const r = await axiosAuth().get('/billing/features');
-        if (!cancelled) setData({ ...r.data, loaded: true });
+        if (!cancelled) setData({ ...r.data, loaded: true, featuresLoading: false });
       } catch {
-        // Fall back to all-on so the user isn't locked out by a transient API hiccup
-        if (!cancelled) setData(d => ({ ...d, loaded: true }));
+        // API error — keep all flags false so gated features stay hidden
+        if (!cancelled) setData(d => ({ ...d, loaded: true, featuresLoading: false }));
       }
     })();
     return () => { cancelled = true; };

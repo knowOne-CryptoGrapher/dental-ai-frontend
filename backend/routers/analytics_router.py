@@ -3,6 +3,7 @@ from datetime import datetime, timezone, timedelta
 import logging
 
 from auth import get_db, get_current_user, require_role
+from dependencies import require_feature
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["analytics"])
@@ -76,7 +77,10 @@ async def dismiss(notification_id: str, current_user: dict = Depends(get_current
 # ==== ANALYTICS DASHBOARD ====
 
 @router.get("/analytics/dashboard")
-async def analytics_dashboard(current_user: dict = Depends(get_current_user)):
+async def analytics_dashboard(
+    current_user: dict = Depends(get_current_user),
+    _gate: None = Depends(require_feature("analytics")),
+):
     db = get_db()
     practice_id = current_user.get("practice_id")
     if not practice_id:
@@ -129,7 +133,10 @@ async def analytics_dashboard(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/analytics/provider")
-async def provider_analytics(current_user: dict = Depends(get_current_user)):
+async def provider_analytics(
+    current_user: dict = Depends(get_current_user),
+    _gate: None = Depends(require_feature("analytics")),
+):
     db = get_db()
     practice_id = current_user.get("practice_id")
     provider_id = current_user.get("provider_id")
@@ -175,14 +182,21 @@ async def get_audit_logs(limit: int = 100, current_user: dict = Depends(require_
 # ==== SETTINGS ====
 
 @router.get("/settings/voice")
-async def get_voice_config(current_user: dict = Depends(get_current_user)):
+async def get_voice_config(
+    current_user: dict = Depends(get_current_user),
+    _gate: None = Depends(require_feature("custom_voice")),
+):
     db = get_db()
     config = await db.settings.find_one({"practice_id": current_user.get("practice_id"), "type": "voice"}, {"_id": 0})
     return config or {"voice_model": "Polly.Joanna"}
 
 
 @router.post("/settings/voice")
-async def update_voice_config(request: dict, current_user: dict = Depends(require_role("admin"))):
+async def update_voice_config(
+    request: dict,
+    current_user: dict = Depends(require_role("admin")),
+    _gate: None = Depends(require_feature("custom_voice")),
+):
     db = get_db()
     await db.settings.update_one(
         {"practice_id": current_user["practice_id"], "type": "voice"},
@@ -215,14 +229,21 @@ async def update_retention(request: dict, current_user: dict = Depends(require_r
 
 
 @router.get("/settings/insurance")
-async def get_insurance_settings(current_user: dict = Depends(require_role("admin"))):
+async def get_insurance_settings(
+    current_user: dict = Depends(require_role("admin")),
+    _gate: None = Depends(require_feature("insurance")),
+):
     db = get_db()
     config = await db.settings.find_one({"practice_id": current_user["practice_id"], "type": "insurance"}, {"_id": 0})
     return config or {"itrans_office_number": "", "carriers": [], "cdanet_enabled": False}
 
 
 @router.post("/settings/insurance")
-async def update_insurance_settings(request: dict, current_user: dict = Depends(require_role("admin"))):
+async def update_insurance_settings(
+    request: dict,
+    current_user: dict = Depends(require_role("admin")),
+    _gate: None = Depends(require_feature("insurance")),
+):
     db = get_db()
     await db.settings.update_one(
         {"practice_id": current_user["practice_id"], "type": "insurance"},
@@ -230,3 +251,38 @@ async def update_insurance_settings(request: dict, current_user: dict = Depends(
         upsert=True
     )
     return {"status": "success"}
+
+
+_ALLOWED_MODEL_PREFERENCES = {"gpt-4o-mini", "gpt-4o", "claude-sonnet"}
+
+
+@router.get("/settings/model")
+async def get_model_preference(
+    current_user: dict = Depends(get_current_user),
+    _gate: None = Depends(require_feature("custom_model_selection")),
+):
+    db = get_db()
+    practice = await db.practices.find_one(
+        {"id": current_user.get("practice_id")}, {"_id": 0, "model_preference": 1}
+    ) or {}
+    return {"model_preference": practice.get("model_preference")}
+
+
+@router.put("/settings/model")
+async def update_model_preference(
+    request: dict,
+    current_user: dict = Depends(require_role("admin")),
+    _gate: None = Depends(require_feature("custom_model_selection")),
+):
+    pref = request.get("model_preference")
+    if pref is not None and pref not in _ALLOWED_MODEL_PREFERENCES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid model_preference '{pref}'. Allowed: {sorted(_ALLOWED_MODEL_PREFERENCES)} or null.",
+        )
+    db = get_db()
+    await db.practices.update_one(
+        {"id": current_user["practice_id"]},
+        {"$set": {"model_preference": pref}},
+    )
+    return {"model_preference": pref}

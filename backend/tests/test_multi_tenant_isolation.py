@@ -38,7 +38,7 @@ def _create_practice_and_admin(slug: str) -> dict:
         "contact_email": f"admin-{slug}@example.com",
         "status": "active",
         "billing_status": "active",
-        "subscription_plan": "starter",
+        "subscription_plan": "basic",
         "default_timezone": "America/Toronto",
         "default_retention_years": 7,
         "created_at": time.time(),

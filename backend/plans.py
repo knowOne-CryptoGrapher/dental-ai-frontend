@@ -46,6 +46,9 @@ class PlanFeatures:
     custom_routing_rules: bool = False
     knowledge_base: bool = False
     sip_telephony: bool = False
+    dedicated_support: bool = False
+    baa_available: bool = False
+    custom_model_selection: bool = False
 
 
 @dataclass(frozen=True)
@@ -139,7 +142,7 @@ PLANS: dict[str, Plan] = {
         description="Perfect for solo practitioners. Single location, cheap-model AI receptionist.",
         stripe_price_id_env="STRIPE_PRICE_BASIC",
         limits=PlanLimits(calls_per_month=250, providers_max=5, locations_max=1, users_max=5),
-        features=PlanFeatures(),
+        features=PlanFeatures(audit_log=True),
         llm=_BASIC_LLM,
     ),
     "professional": Plan(
@@ -170,7 +173,8 @@ PLANS: dict[str, Plan] = {
         limits=PlanLimits(calls_per_month=10000, providers_max=200, locations_max=100, users_max=1000),
         features=PlanFeatures(
             analytics=True, insurance=True, audit_log=True, multi_location=True,
-            custom_voice=True, custom_routing_rules=True, knowledge_base=True, sip_telephony=True
+            custom_voice=True, custom_routing_rules=True, knowledge_base=True, sip_telephony=True,
+            dedicated_support=True, baa_available=True, custom_model_selection=True,
         ),
         llm=_ELITE_LLM,
     ),

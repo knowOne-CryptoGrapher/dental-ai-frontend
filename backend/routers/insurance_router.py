@@ -14,6 +14,7 @@ from cdanet.cdanet_codes import (
     interpret_cdanet_response,
 )
 from insurance.itrans_client import ITRANSClient
+from dependencies import require_feature
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/insurance", tags=["insurance"])
@@ -41,6 +42,7 @@ async def check_eligibility(
     check: EligibilityCheck,
     current_user: dict = Depends(require_role("admin", "staff")),
     _scope=Depends(require_practice_scope()),
+    _gate: None = Depends(require_feature("insurance")),
 ):
     """Check patient insurance eligibility."""
     db = get_db()
@@ -76,6 +78,7 @@ async def create_claim(
     body: ClaimCreate,
     current_user: dict = Depends(require_role("admin", "staff")),
     _scope=Depends(require_practice_scope()),
+    _gate: None = Depends(require_feature("insurance")),
 ):
     """Create a new claim in draft state."""
     db = get_db()

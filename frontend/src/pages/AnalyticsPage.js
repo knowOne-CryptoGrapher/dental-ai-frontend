@@ -6,12 +6,16 @@ import {
   ShieldCheck, AlertTriangle, TrendingUp
 } from 'lucide-react';
 import { mockAnalytics } from '../data/mockData';
+import { useFeatures } from '../hooks/useFeatures';
+import FeatureUpgradeCard from '../components/FeatureUpgradeCard';
 
 export default function AnalyticsPage({ useMock = false }) {
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { has, featuresLoading } = useFeatures();
 
   useEffect(() => {
+    if (!useMock && (featuresLoading || !has('analytics'))) return;
     const fetchAnalytics = async () => {
       if (useMock) {
         setAnalytics(mockAnalytics);
@@ -30,7 +34,23 @@ export default function AnalyticsPage({ useMock = false }) {
     };
 
     fetchAnalytics();
-  }, [useMock]);
+  }, [useMock, featuresLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!useMock && !featuresLoading && !has('analytics')) {
+    return (
+      <FeatureUpgradeCard
+        featureName="Analytics"
+        description="Track call volume, provider performance, and patient trends across your practice."
+        bullets={[
+          'Call outcome tracking',
+          'Provider performance reports',
+          'Patient inquiry trends',
+        ]}
+        requiredTier="Professional"
+        ctaLabel="Upgrade to Professional"
+      />
+    );
+  }
 
   if (loading || !analytics) {
     return (

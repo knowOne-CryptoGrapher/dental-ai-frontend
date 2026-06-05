@@ -52,6 +52,8 @@ from routers.retell_webhook_router import router as retell_webhook_router
 from routers.pending_actions_router import router as pending_actions_router
 from routers.ai_safety_router import router as ai_safety_router
 from routers.invite_router import router as invite_router
+from routers.knowledge_router import router as knowledge_router
+from routers.routing_rules_router import router as routing_rules_router
 
 # -------------------------------------------------------------------
 # LLM Manager Initialization
@@ -302,6 +304,8 @@ app.include_router(internal_router)
 app.include_router(pending_actions_router)
 app.include_router(ai_safety_router)
 app.include_router(invite_router)
+app.include_router(knowledge_router)
+app.include_router(routing_rules_router)
 
 # -------------------------------------------------------------------
 # Global Error Handler

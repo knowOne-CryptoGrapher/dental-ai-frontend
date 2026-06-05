@@ -94,6 +94,19 @@ def _sse(event_obj: dict) -> bytes:
     return f"data: {json.dumps(event_obj)}\n\n".encode("utf-8")
 
 
+async def get_routing_rules(practice_id: str, db) -> list:
+    """Fetch enabled routing rules for a practice, sorted by priority asc.
+    Returns an empty list on any failure so the LLM call is never blocked."""
+    try:
+        rules = await db.routing_rules.find(
+            {"practice_id": practice_id, "enabled": True},
+            {"_id": 0, "priority": 1, "condition": 1, "action": 1},
+        ).sort("priority", 1).to_list(100)
+        return rules
+    except Exception:
+        return []
+
+
 # ── Routes ────────────────────────────────────────────────────────────
 
 
@@ -146,7 +159,49 @@ async def chat_completions(req: ChatCompletionsRequest, request: Request):
                 plan = get_plan(practice.get("subscription_plan"))
         except Exception as e:
             logger.warning(f"plan lookup failed for {practice_id}: {e}")
+
+        # Inject custom routing rules into the system message (additive; no change to escalation logic)
+        try:
+            rules = await get_routing_rules(practice_id, get_db())
+            if rules:
+                rules_lines = ["=== Custom Routing Rules (evaluate in order) ==="]
+                for rule in rules:
+                    rules_lines.append(
+                        f"Rule {rule['priority']}: If {rule['condition']}, then {rule['action']}."
+                    )
+                rules_text = "\n".join(rules_lines)
+                for i, msg in enumerate(chat_msgs):
+                    if msg.role == "system":
+                        chat_msgs[i] = ChatMessage(
+                            role="system",
+                            content=rules_text + "\n\n" + msg.content,
+                            name=msg.name,
+                        )
+                        break
+        except Exception as e:
+            logger.warning(f"routing rules injection failed for {practice_id}: {e}")
+
     decision = llm_router.decide(chat_msgs, plan=plan)
+
+    # Apply custom model preference for Elite practices — overrides default routing when set
+    if practice_id and plan and getattr(plan.features, "custom_model_selection", False):
+        try:
+            pref_doc = await get_db().practices.find_one(
+                {"id": practice_id}, {"_id": 0, "model_preference": 1}
+            ) or {}
+            model_pref = pref_doc.get("model_preference")
+            if model_pref == "gpt-4o":
+                decision.provider = "openai"
+                decision.model = "gpt-4o"
+                decision.reason = "custom_model_selection:gpt-4o"
+            elif model_pref == "claude-sonnet":
+                decision.provider = ESCALATION_PROVIDER
+                decision.model = ESCALATION_MODEL
+                decision.reason = "custom_model_selection:claude-sonnet"
+            # gpt-4o-mini and null both use default routing — no override needed
+        except Exception as e:
+            logger.warning(f"model preference override failed for {practice_id}: {e}")
+
     call_id = _extract_call_id(req)
 
     try:

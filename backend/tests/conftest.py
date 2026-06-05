@@ -93,7 +93,7 @@ def create_practice(slug: str | None = None) -> dict:
         "contact_email": f"admin@{slug}.local",
         "status": "active",
         "billing_status": "active",
-        "subscription_plan": "starter",
+        "subscription_plan": "basic",
         "default_timezone": "America/Toronto",
         "default_retention_years": 7,
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),

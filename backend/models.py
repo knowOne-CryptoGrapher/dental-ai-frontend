@@ -14,7 +14,7 @@ class Practice(BaseModel):
     status: str = "active"  # active, suspended, cancelled
     billing_status: str = "active"  # active, past_due, cancelled
     stripe_customer_id: Optional[str] = None
-    subscription_plan: str = "starter"  # starter, growth, enterprise
+    subscription_plan: str = "basic"  # basic, professional, enterprise, elite
     default_timezone: str = "America/Toronto"
     default_retention_years: int = 7
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -23,6 +23,7 @@ class Practice(BaseModel):
     home_region: Optional[str] = None       # "ca-west" or "ca-east" — derived from province
     db_cluster: Optional[str] = None        # "atlas-ca-west" or "atlas-ca-east"
     compute_region: Optional[str] = None    # GCP region label for audit
+    model_preference: Optional[str] = None  # gpt-4o-mini | gpt-4o | claude-sonnet | None (default routing)
 
 class PracticeCreate(BaseModel):
     name: str
@@ -347,7 +348,7 @@ class BillingCustomer(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     practice_id: str
     stripe_customer_id: str = ""
-    plan: str = "starter"
+    plan: str = "basic"
     status: str = "active"
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -487,6 +488,60 @@ class InviteComplete(BaseModel):
     password: str
     accepted_terms_version: str
     accepted_privacy_version: str
+
+
+# ==== KNOWLEDGE BASE ====
+
+class KnowledgeDocument(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    practice_id: str
+    title: str
+    content: str
+    category: str
+    created_at: datetime
+    updated_at: datetime
+    created_by: str
+
+class KnowledgeDocumentCreate(BaseModel):
+    title: str
+    content: str
+    category: str = "General"
+
+class KnowledgeDocumentUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    category: Optional[str] = None
+
+
+# ==== ROUTING RULES ====
+
+class RoutingRule(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    practice_id: str
+    name: str
+    condition: str
+    action: str
+    priority: int
+    enabled: bool = True
+    created_at: datetime
+    updated_at: datetime
+    created_by: str
+
+class RoutingRuleCreate(BaseModel):
+    name: str
+    condition: str
+    action: str
+    priority: int
+    enabled: bool = True
+
+class RoutingRuleUpdate(BaseModel):
+    name: Optional[str] = None
+    condition: Optional[str] = None
+    action: Optional[str] = None
+    priority: Optional[int] = None
+    enabled: Optional[bool] = None
 
 
 # ==== ONBOARDING ====

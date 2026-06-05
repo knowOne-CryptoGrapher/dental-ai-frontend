@@ -201,7 +201,7 @@ async def create_practice_admin(data: PracticeCreate, current_user: dict = Depen
         "contact_phone": data.contact_phone,
         "status": "active",
         "billing_status": "active",
-        "subscription_plan": "starter",
+        "subscription_plan": "basic",
         "default_timezone": data.default_timezone,
         "default_retention_years": 7,
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -232,15 +232,19 @@ async def platform_analytics(current_user: dict = Depends(require_role("super_ad
 @router.get("/admin/billing/overview")
 async def billing_overview(current_user: dict = Depends(require_role("super_admin"))):
     db = get_db()
-    customers = await db.billing_customers.find({}, {"_id": 0}).to_list(500)
-    plans = {"starter": 0, "growth": 0, "enterprise": 0}
-    for c in customers:
-        plan = c.get("plan", "starter")
-        plans[plan] = plans.get(plan, 0) + 1
+    pipeline = [
+        {"$group": {"_id": "$plan", "count": {"$sum": 1}}},
+    ]
+    plan_dist: dict[str, int] = {}
+    async for row in db.billing_customers.aggregate(pipeline):
+        plan_dist[row["_id"] or "unknown"] = row["count"]
+
+    total = await db.billing_customers.count_documents({})
+    active = await db.billing_customers.count_documents({"status": "active"})
     return {
-        "total_customers": len(customers),
-        "plan_distribution": plans,
-        "active": sum(1 for c in customers if c.get("status") == "active"),
+        "total_customers": total,
+        "plan_distribution": plan_dist,
+        "active": active,
     }
 
 # ==== LOCATIONS ====

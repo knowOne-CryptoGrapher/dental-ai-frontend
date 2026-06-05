@@ -26,7 +26,32 @@ class ContextBundle:
     appointment_availability: list  # Available slots
     practice_policies: dict    # Cancellation, late arrival, etc.
     patient_record: Optional[dict] = None  # Only if caller is authenticated
+    knowledge_context: str = ""  # Formatted knowledge base documents (Enterprise+)
     # Never include: patient health data beyond name and appointment history
+
+
+async def get_knowledge_context(practice_id: str, db) -> str:
+    """
+    Fetch practice knowledge documents and format them for LLM context injection.
+    Returns an empty string if no documents exist or if the query fails.
+    """
+    try:
+        docs = await db.knowledge.find(
+            {"practice_id": practice_id},
+            {"_id": 0, "title": 1, "content": 1, "category": 1},
+        ).to_list(100)
+        if not docs:
+            return ""
+        lines = ["=== Practice Knowledge Base ==="]
+        for doc in docs:
+            category = doc.get("category", "General").upper()
+            title = doc.get("title", "")
+            content = doc.get("content", "")
+            lines.append(f"\n[{category}] {title}")
+            lines.append(content)
+        return "\n".join(lines)
+    except Exception:
+        return ""
 
 
 async def build_context(practice_id: str, db, patient_id: str = None) -> ContextBundle:
@@ -67,6 +92,8 @@ async def build_context(practice_id: str, db, patient_id: str = None) -> Context
             ).limit(3).to_list(3)
             patient_record = {"name": patient.get("name"), "recent_appointments": recent_appts}
 
+    knowledge_context = await get_knowledge_context(practice_id, db)
+
     bundle = ContextBundle(
         practice_id=practice_id,
         retrieved_at=now.isoformat(),
@@ -77,6 +104,7 @@ async def build_context(practice_id: str, db, patient_id: str = None) -> Context
         appointment_availability=slots,
         practice_policies=config.get("policies", {}),
         patient_record=patient_record,
+        knowledge_context=knowledge_context,
     )
 
     bundle_dict = asdict(bundle)
@@ -124,6 +152,9 @@ def format_context_for_prompt(bundle: ContextBundle) -> str:
             "CALLER RECORD:",
             f"  Name: {bundle.patient_record.get('name', 'Unknown')}",
         ]
+
+    if bundle.knowledge_context:
+        lines += ["", bundle.knowledge_context]
 
     lines += [
         "",
