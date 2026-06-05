@@ -438,7 +438,7 @@ export default function OnboardingWizard() {
                 <span className="text-sm text-gray-700">
                   I agree to the{' '}
                   <a
-                    href="/legal/terms"
+                    href="/terms"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-teal-600 hover:underline font-medium"
@@ -459,7 +459,7 @@ export default function OnboardingWizard() {
                 <span className="text-sm text-gray-700">
                   I have read and agree to the{' '}
                   <a
-                    href="/legal/privacy-policy"
+                    href="/privacy"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-teal-600 hover:underline font-medium"

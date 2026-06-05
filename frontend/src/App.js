@@ -22,12 +22,15 @@ import SuperAdminRetellPage from "./pages/SuperAdminRetellPage";
 import SuperAdminDashboardPage from "./pages/SuperAdminDashboardPage";
 import SuperAdminPracticesPage from "./pages/SuperAdminPracticesPage";
 import SuperAdminLLMPage from "./pages/SuperAdminLLMPage";
-import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
-import TermsPage from "./pages/TermsPage";
 import InvitePage from "./pages/InvitePage";
 import KnowledgeBasePage from "./pages/KnowledgeBasePage";
 import RoutingRulesPage from "./pages/RoutingRulesPage";
 import ErrorBoundary from "./components/ErrorBoundary";
+import LandingPage from "./pages/LandingPage";
+import DemoPage from "./pages/DemoPage";
+import PricingPage from "./pages/PricingPage";
+import PrivacyPage from "./pages/PrivacyPage";
+import TermsOfServicePage from "./pages/TermsOfServicePage";
 import axios from "axios";
 
 const BACKEND_URL = process.env.REACT_APP_API_URL;
@@ -138,8 +141,11 @@ function AppContent() {
   return (
     <Routes>
       {/* Public pages — no auth required */}
-      <Route path="/legal/privacy-policy" element={<PrivacyPolicyPage />} />
-      <Route path="/legal/terms" element={<TermsPage />} />
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/demo" element={<DemoPage />} />
+      <Route path="/pricing" element={<PricingPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
+      <Route path="/terms" element={<TermsOfServicePage />} />
       <Route path="/invite/:token" element={<InvitePage />} />
 
       <Route path="/login" element={user ? <Navigate to={homeFor()} replace /> : <LoginPage />} />

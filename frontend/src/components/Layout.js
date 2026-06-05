@@ -235,11 +235,11 @@ export default function Layout({ children, notifications = [], onNotificationRea
           </button>
           {sidebarOpen && (
             <nav className="mt-2 pt-2 border-t border-gray-100 flex flex-col gap-0.5 px-1">
-              <a href="/legal/privacy-policy" target="_blank" rel="noopener noreferrer"
+              <a href="/privacy" target="_blank" rel="noopener noreferrer"
                 className="text-[10px] text-gray-400 hover:text-gray-600 px-2 py-0.5 rounded hover:bg-gray-50 transition-colors">
                 Privacy Policy
               </a>
-              <a href="/legal/terms" target="_blank" rel="noopener noreferrer"
+              <a href="/terms" target="_blank" rel="noopener noreferrer"
                 className="text-[10px] text-gray-400 hover:text-gray-600 px-2 py-0.5 rounded hover:bg-gray-50 transition-colors">
                 Terms &amp; Conditions
               </a>
