@@ -453,6 +453,31 @@ def default_practice_settings() -> dict:
     }
 
 
+# ==== INVITE TOKENS ====
+
+class InviteToken(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    token: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    practice_id: str
+    email: str
+    role: str  # staff | provider | auditor
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    expires_at: str
+    used: bool = False
+    used_at: Optional[str] = None
+    created_by: Optional[str] = None
+
+class InviteCreate(BaseModel):
+    email: EmailStr
+    role: str = "staff"
+
+class InviteComplete(BaseModel):
+    full_name: str
+    password: str
+    accepted_terms_version: str
+    accepted_privacy_version: str
+
+
 # ==== ONBOARDING ====
 
 class OnboardingRequest(BaseModel):

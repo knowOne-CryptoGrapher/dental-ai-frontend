@@ -20,6 +20,9 @@ import {
   Loader2,
   Shield,
   Clock,
+  Mail,
+  Copy,
+  Check,
 } from 'lucide-react';
 
 export default function ManagePage() {
@@ -29,27 +32,36 @@ export default function ManagePage() {
   const [locations, setLocations] = useState([]);
   const [providers, setProviders] = useState([]);
   const [users, setUsers] = useState([]);
+  const [pendingInvites, setPendingInvites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dialog, setDialog] = useState(null); // 'location' | 'provider' | 'user'
   const [editingItem, setEditingItem] = useState(null);
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [inviteResult, setInviteResult] = useState(null); // { invite_url, role, email }
+  const [copiedUrl, setCopiedUrl] = useState(false);
 
   useEffect(() => {
     fetchAll();
   }, []);
 
   const fetchAll = async () => {
+    const practiceId = user?.practice_id;
     try {
-      const [locRes, provRes, userRes] = await Promise.all([
+      const requests = [
         api.get('/locations'),
         api.get('/providers'),
         api.get('/practice/users'),
-      ]);
+      ];
+      if (practiceId) {
+        requests.push(api.get(`/practices/${practiceId}/staff/invites`));
+      }
+      const [locRes, provRes, userRes, inviteRes] = await Promise.all(requests);
       setLocations(locRes.data);
       setProviders(provRes.data);
       setUsers(userRes.data);
+      if (inviteRes) setPendingInvites(inviteRes.data);
     } catch (e) {
       console.error(e);
     } finally {
@@ -91,18 +103,31 @@ export default function ManagePage() {
     }
   };
 
-  const inviteUser = async () => {
+  const sendInvite = async () => {
+    const practiceId = user?.practice_id;
+    if (!practiceId) { setError('Practice ID not available.'); return; }
     setSaving(true);
+    setError('');
     try {
-      const res = await api.post('/auth/invite', form);
-      alert(`User invited! Temporary password: ${res.data.temporary_password}`);
+      const res = await api.post(`/practices/${practiceId}/staff/invite`, {
+        email: form.email,
+        role: form.role,
+      });
+      setInviteResult({ invite_url: res.data.invite_url, email: form.email, role: form.role });
       await fetchAll();
-      setDialog(null);
     } catch (e) {
-      alert(e.response?.data?.detail || 'Failed');
+      setError(e.response?.data?.detail || 'Failed to send invite');
     } finally {
       setSaving(false);
     }
+  };
+
+  const copyInviteUrl = () => {
+    if (!inviteResult?.invite_url) return;
+    navigator.clipboard.writeText(inviteResult.invite_url).then(() => {
+      setCopiedUrl(true);
+      setTimeout(() => setCopiedUrl(false), 2000);
+    });
   };
 
   // Dialog opener functions
@@ -486,8 +511,10 @@ export default function ManagePage() {
             <Button
               className="bg-teal-600 hover:bg-teal-700"
               onClick={() => {
-                setForm({ email: '', full_name: '', role: 'staff' });
+                setForm({ email: '', role: 'staff' });
                 setError('');
+                setInviteResult(null);
+                setCopiedUrl(false);
                 setDialog('user');
               }}
             >
@@ -532,6 +559,39 @@ export default function ManagePage() {
               </Card>
             ))}
           </div>
+
+          {/* Pending invites */}
+          {pendingInvites.length > 0 && (
+            <div className="mt-6 space-y-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                Pending Invites ({pendingInvites.length})
+              </p>
+              {pendingInvites.map((inv) => (
+                <Card key={inv.token} className="border-dashed border-gray-300 bg-gray-50/60">
+                  <CardContent className="p-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                        <Mail className="w-4 h-4 text-gray-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">{inv.email}</p>
+                        <p className="text-xs text-gray-400">
+                          Invited as <span className="font-medium">{inv.role}</span>
+                          {' · '}
+                          Expires {new Date(inv.expires_at).toLocaleDateString(undefined, {
+                            month: 'short', day: 'numeric',
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-300">
+                      Pending
+                    </Badge>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 
@@ -1001,70 +1061,115 @@ export default function ManagePage() {
         onOpenChange={() => {
           setDialog(null);
           setError('');
+          setInviteResult(null);
+          setCopiedUrl(false);
         }}
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Invite Team Member</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            {error && (
-              <div className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-600">
-                {error}
+
+          {inviteResult ? (
+            /* ── Success state: show the invite link ── */
+            <div className="space-y-4">
+              <div className="p-3 bg-teal-50 border border-teal-200 rounded-lg text-sm text-teal-800">
+                Invite sent for <strong>{inviteResult.email}</strong> as{' '}
+                <strong>{inviteResult.role}</strong>. Share this link:
               </div>
-            )}
-            <div className="space-y-1.5">
-              <Label>Full Name *</Label>
-              <Input
-                value={form.full_name || ''}
-                onChange={(e) =>
-                  setForm({ ...form, full_name: e.target.value })
-                }
-                placeholder="Jane Doe"
-              />
+              <div className="flex items-center gap-2">
+                <Input
+                  value={inviteResult.invite_url}
+                  readOnly
+                  className="text-xs bg-gray-50 text-gray-600"
+                />
+                <Button
+                  size="icon"
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={copyInviteUrl}
+                >
+                  {copiedUrl ? (
+                    <Check className="w-4 h-4 text-teal-600" />
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-gray-400">
+                This link expires in 24 hours. The invitee will set their own password.
+              </p>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setDialog(null);
+                    setInviteResult(null);
+                  }}
+                >
+                  Done
+                </Button>
+                <Button
+                  className="bg-teal-600 hover:bg-teal-700"
+                  onClick={() => {
+                    setForm({ email: '', role: 'staff' });
+                    setError('');
+                    setInviteResult(null);
+                    setCopiedUrl(false);
+                  }}
+                >
+                  Invite Another
+                </Button>
+              </DialogFooter>
             </div>
-            <div className="space-y-1.5">
-              <Label>Email *</Label>
-              <Input
-                type="email"
-                value={form.email || ''}
-                onChange={(e) =>
-                  setForm({ ...form, email: e.target.value })
-                }
-                placeholder="jane@example.com"
-              />
+          ) : (
+            /* ── Form state ── */
+            <div className="space-y-3">
+              {error && (
+                <div className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-600">
+                  {error}
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label>Email *</Label>
+                <Input
+                  type="email"
+                  value={form.email || ''}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  placeholder="jane@example.com"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Role</Label>
+                <select
+                  value={form.role || 'staff'}
+                  onChange={(e) => setForm({ ...form, role: e.target.value })}
+                  className="w-full h-10 rounded-md border border-gray-200 bg-white px-3 text-sm"
+                >
+                  <option value="staff">Staff</option>
+                  <option value="provider">Provider</option>
+                  <option value="auditor">Auditor</option>
+                </select>
+              </div>
+              <p className="text-xs text-gray-400">
+                The invitee will receive a secure link to set their own password.
+                Admins can only be created through the main registration flow.
+              </p>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDialog(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  className="bg-teal-600 hover:bg-teal-700"
+                  onClick={sendInvite}
+                  disabled={saving || !form.email}
+                >
+                  {saving && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                  Send Invite
+                </Button>
+              </DialogFooter>
             </div>
-            <div className="space-y-1.5">
-              <Label>Role</Label>
-              <select
-                value={form.role || 'staff'}
-                onChange={(e) =>
-                  setForm({ ...form, role: e.target.value })
-                }
-                className="w-full h-10 rounded-md border border-gray-200 bg-white px-3 text-sm"
-              >
-                <option value="staff">Staff</option>
-                <option value="admin">Admin</option>
-                <option value="provider">Provider</option>
-                <option value="auditor">Auditor</option>
-              </select>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDialog(null)}>
-                Cancel
-              </Button>
-              <Button
-                className="bg-teal-600 hover:bg-teal-700"
-                onClick={inviteUser}
-                disabled={saving}
-              >
-                {saving && (
-                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                )}
-                Invite
-              </Button>
-            </DialogFooter>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

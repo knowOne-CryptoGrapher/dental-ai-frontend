@@ -24,6 +24,7 @@ import SuperAdminPracticesPage from "./pages/SuperAdminPracticesPage";
 import SuperAdminLLMPage from "./pages/SuperAdminLLMPage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 import TermsPage from "./pages/TermsPage";
+import InvitePage from "./pages/InvitePage";
 import ErrorBoundary from "./components/ErrorBoundary";
 import axios from "axios";
 
@@ -134,9 +135,10 @@ function AppContent() {
 
   return (
     <Routes>
-      {/* Public legal pages — no auth required */}
+      {/* Public pages — no auth required */}
       <Route path="/legal/privacy-policy" element={<PrivacyPolicyPage />} />
       <Route path="/legal/terms" element={<TermsPage />} />
+      <Route path="/invite/:token" element={<InvitePage />} />
 
       <Route path="/login" element={user ? <Navigate to={homeFor()} replace /> : <LoginPage />} />
       <Route path="/signup" element={<OnboardingWizard />} />
