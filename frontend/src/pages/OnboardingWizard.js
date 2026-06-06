@@ -20,7 +20,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
 
 import { useAuth } from '@/hooks/useAuth';
-import api from '@/lib/api';
+import { api } from '@/config/api';
 import { TERMS_VERSION, PRIVACY_POLICY_VERSION } from '@/config/legal';
 
 const CANADIAN_PROVINCES = [
@@ -198,11 +198,12 @@ export default function OnboardingWizard() {
   const saveHours = async () => {
     setSaving(true);
     try {
-      await api.put('/practice/settings/hours', hours);
+      await api.put(`/practice/${user?.practice_id}/hours`, hours);
       toast.success('Hours saved');
       next();
     } catch (err) {
-      toast.error('Failed to save hours');
+      console.error('Failed to save hours:', err);
+      toast.error(err?.response?.data?.detail || 'Failed to save hours');
     } finally {
       setSaving(false);
     }
@@ -212,12 +213,13 @@ export default function OnboardingWizard() {
     if (!newProvider.name) return;
     setSaving(true);
     try {
-      const res = await api.post('/practice/providers', newProvider);
+      const res = await api.post('/providers', newProvider);
       setProviders([...providers, res.data]);
       setNewProvider({ name: '', role: 'Dentist' });
       toast.success('Provider added');
-    } catch {
-      toast.error('Failed to add provider');
+    } catch (err) {
+      console.error('Failed to add provider:', err);
+      toast.error(err?.response?.data?.detail || 'Failed to add provider');
     } finally {
       setSaving(false);
     }
@@ -226,11 +228,12 @@ export default function OnboardingWizard() {
   const removeProvider = async (id) => {
     setSaving(true);
     try {
-      await api.delete(`/practice/providers/${id}`);
+      await api.delete(`/providers/${id}`);
       setProviders(providers.filter((p) => p.id !== id));
       toast.success('Provider removed');
-    } catch {
-      toast.error('Failed to remove provider');
+    } catch (err) {
+      console.error('Failed to remove provider:', err);
+      toast.error(err?.response?.data?.detail || 'Failed to remove provider');
     } finally {
       setSaving(false);
     }
@@ -240,12 +243,13 @@ export default function OnboardingWizard() {
     if (!newType.name) return;
     setSaving(true);
     try {
-      const res = await api.post('/practice/appointment-types', newType);
+      const res = await api.post(`/practice/${user?.practice_id}/appointment-types`, newType);
       setApptTypes([...apptTypes, res.data]);
       setNewType({ id: '', name: '', duration_min: 30 });
       toast.success('Appointment type added');
-    } catch {
-      toast.error('Failed to add appointment type');
+    } catch (err) {
+      console.error('Failed to add appointment type:', err);
+      toast.error(err?.response?.data?.detail || 'Failed to add appointment type');
     } finally {
       setSaving(false);
     }
@@ -254,11 +258,12 @@ export default function OnboardingWizard() {
   const removeApptType = async (id) => {
     setSaving(true);
     try {
-      await api.delete(`/practice/appointment-types/${id}`);
+      await api.delete(`/practice/${user?.practice_id}/appointment-types/${id}`);
       setApptTypes(apptTypes.filter((t) => t.id !== id));
       toast.success('Appointment type removed');
-    } catch {
-      toast.error('Failed to remove appointment type');
+    } catch (err) {
+      console.error('Failed to remove appointment type:', err);
+      toast.error(err?.response?.data?.detail || 'Failed to remove appointment type');
     } finally {
       setSaving(false);
     }
@@ -267,11 +272,12 @@ export default function OnboardingWizard() {
   const saveBranding = async () => {
     setSaving(true);
     try {
-      await api.put('/practice/settings/branding', branding);
+      await api.put(`/practice/${user?.practice_id}/branding`, branding);
       toast.success('Branding saved');
       next();
-    } catch {
-      toast.error('Failed to save branding');
+    } catch (err) {
+      console.error('Failed to save branding:', err);
+      toast.error(err?.response?.data?.detail || 'Failed to save branding');
     } finally {
       setSaving(false);
     }
@@ -280,11 +286,12 @@ export default function OnboardingWizard() {
   const saveEmergency = async () => {
     setSaving(true);
     try {
-      await api.put('/practice/settings/emergency', emergency);
+      await api.put(`/practice/${user?.practice_id}/emergency-rules`, emergency);
       toast.success('Emergency rules saved');
       next();
-    } catch {
-      toast.error('Failed to save emergency rules');
+    } catch (err) {
+      console.error('Failed to save emergency rules:', err);
+      toast.error(err?.response?.data?.detail || 'Failed to save emergency rules');
     } finally {
       setSaving(false);
     }
@@ -292,24 +299,25 @@ export default function OnboardingWizard() {
 
   const loadRetellPrompt = async () => {
     try {
-      const res = await api.get('/practice/settings/retell/prompt');
+      const res = await api.get(`/agent/${user?.practice_id}/prompt`);
       setRetellPayload(res.data);
-    } catch {
-      toast.error('Failed to load Retell prompt');
+    } catch (err) {
+      console.error('Failed to load Retell prompt:', err);
+      toast.error(err?.response?.data?.detail || 'Failed to load Retell prompt');
     }
   };
 
   const saveRetell = async () => {
     setSaving(true);
     try {
-      await api.put('/practice/settings/retell', {
-        agent_id: retellAgentId,
-        phone_number: retellPhone,
+      await api.put(`/practice/${user?.practice_id}/config`, {
+        retell: { agent_id: retellAgentId, phone_number: retellPhone },
       });
       toast.success('Retell settings saved');
       next();
-    } catch {
-      toast.error('Failed to save Retell settings');
+    } catch (err) {
+      console.error('Failed to save Retell settings:', err);
+      toast.error(err?.response?.data?.detail || 'Failed to save Retell settings');
     } finally {
       setSaving(false);
     }
@@ -321,8 +329,9 @@ export default function OnboardingWizard() {
       await completeOnboarding();
       toast.success('Onboarding complete!');
       navigate('/dashboard');
-    } catch {
-      toast.error('Failed to finish onboarding');
+    } catch (err) {
+      console.error('Failed to finish onboarding:', err);
+      toast.error(err?.response?.data?.detail || 'Failed to finish onboarding');
     } finally {
       setSaving(false);
     }
