@@ -58,9 +58,10 @@ const PLANS = [
   {
     name: 'Basic',
     price: '$399',
+    compliance: 'PHI-safe, PIPEDA/PIPA compliant',
     features: ['250 calls/mo', '5 providers', '1 location', 'Voice AI', 'Appointments', 'Audit Logs'],
     ctaLabel: 'Get Started',
-    ctaHref: '/signup',
+    ctaHref: '/signup?plan=basic',
   },
   {
     name: 'Professional',
@@ -69,20 +70,21 @@ const PLANS = [
     isPopular: true,
     features: ['750 calls/mo', '15 providers', '5 locations', 'Everything in Basic', 'Analytics', 'Insurance/CDAnet'],
     ctaLabel: 'Get Started',
-    ctaHref: '/signup',
+    ctaHref: '/signup?plan=professional',
   },
   {
     name: 'Enterprise',
     price: '$999',
     features: ['2,500 calls/mo', '50 providers', '25 locations', 'Everything in Professional', 'Knowledge Base', 'Routing Rules'],
     ctaLabel: 'Contact Sales',
-    ctaHref: 'mailto:sales@dentalai.ca',
+    ctaHref: '/contact-sales?plan=enterprise',
   },
   {
     name: 'Elite',
     price: '$1,499',
     badge: 'Most Powerful',
     isElite: true,
+    compliance: 'Signed HIPAA/PIPEDA BAA included',
     features: [
       '10,000 calls/mo',
       '200 providers',
@@ -93,7 +95,7 @@ const PLANS = [
       'Custom Model Selection',
     ],
     ctaLabel: 'Contact Sales',
-    ctaHref: 'mailto:sales@dentalai.ca',
+    ctaHref: '/contact-sales?plan=elite',
   },
 ];
 
@@ -338,6 +340,7 @@ export default function LandingPage() {
                 ctaHref={plan.ctaHref}
                 isElite={plan.isElite}
                 isPopular={plan.isPopular}
+                compliance={plan.compliance}
               />
             ))}
           </div>

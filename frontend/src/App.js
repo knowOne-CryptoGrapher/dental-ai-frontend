@@ -31,6 +31,7 @@ import DemoPage from "./pages/DemoPage";
 import PricingPage from "./pages/PricingPage";
 import PrivacyPage from "./pages/PrivacyPage";
 import TermsOfServicePage from "./pages/TermsOfServicePage";
+import ContactSalesPage from "./pages/ContactSalesPage";
 import axios from "axios";
 
 const BACKEND_URL = process.env.REACT_APP_API_URL;
@@ -146,6 +147,7 @@ function AppContent() {
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/terms" element={<TermsOfServicePage />} />
+      <Route path="/contact-sales" element={<ContactSalesPage />} />
       <Route path="/invite/:token" element={<InvitePage />} />
 
       <Route path="/login" element={user ? <Navigate to={homeFor()} replace /> : <LoginPage />} />

@@ -14,9 +14,10 @@ const PLANS = [
     id: 'basic',
     name: 'Basic',
     price: '$399',
+    compliance: 'PHI-safe, PIPEDA/PIPA compliant',
     limits: { calls: '250', providers: '5', locations: '1', users: '5' },
-    ctaLabel: 'Start Free Trial',
-    ctaHref: '/signup',
+    ctaLabel: 'Get Started',
+    ctaHref: '/signup?plan=basic',
   },
   {
     id: 'professional',
@@ -25,8 +26,8 @@ const PLANS = [
     badge: 'Most Popular',
     isPopular: true,
     limits: { calls: '750', providers: '15', locations: '5', users: '25' },
-    ctaLabel: 'Start Free Trial',
-    ctaHref: '/signup',
+    ctaLabel: 'Get Started',
+    ctaHref: '/signup?plan=professional',
   },
   {
     id: 'enterprise',
@@ -34,7 +35,7 @@ const PLANS = [
     price: '$999',
     limits: { calls: '2,500', providers: '50', locations: '25', users: '200' },
     ctaLabel: 'Contact Sales',
-    ctaHref: 'mailto:sales@dentalai.ca',
+    ctaHref: '/contact-sales?plan=enterprise',
   },
   {
     id: 'elite',
@@ -42,9 +43,10 @@ const PLANS = [
     price: '$1,499',
     badge: 'Most Powerful',
     isElite: true,
+    compliance: 'Signed HIPAA/PIPEDA BAA included',
     limits: { calls: '10,000', providers: '200', locations: '100', users: '1,000' },
     ctaLabel: 'Contact Sales',
-    ctaHref: 'mailto:sales@dentalai.ca',
+    ctaHref: '/contact-sales?plan=elite',
   },
 ];
 
@@ -166,7 +168,7 @@ function Cell({ value, isEliteCol }) {
 
 function PlanCard({ plan }) {
   const fKey = PLAN_FEATURE_KEY[plan.id];
-  const isMailto = plan.ctaHref?.startsWith('mailto:');
+  const useAnchor = plan.ctaHref?.startsWith('mailto:') || plan.ctaHref?.startsWith('/contact-sales');
 
   const cardBorder = plan.isElite
     ? {}
@@ -204,6 +206,12 @@ function PlanCard({ plan }) {
         </div>
       </div>
 
+      {plan.compliance && (
+        <p className={`text-xs mb-3 -mt-1 ${plan.isElite ? 'text-[#b8962f] font-medium' : 'text-slate-500'}`}>
+          {plan.compliance}
+        </p>
+      )}
+
       {/* Limits grid */}
       <div className={`grid grid-cols-2 gap-2 mb-5 p-3 rounded-lg ${plan.isElite ? 'bg-yellow-50/50' : 'bg-slate-50'}`}>
         {[
@@ -236,7 +244,7 @@ function PlanCard({ plan }) {
         })}
       </ul>
 
-      {isMailto ? (
+      {useAnchor ? (
         <a href={plan.ctaHref} className={ctaCls} style={plan.isElite ? { backgroundColor: '#D4AF37' } : {}}>
           {plan.ctaLabel}
         </a>

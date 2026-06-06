@@ -2,8 +2,8 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Check } from 'lucide-react';
 
-export default function PricingPreviewCard({ name, price, badge, features, ctaLabel, ctaHref, isElite, isPopular }) {
-  const isMailto = ctaHref?.startsWith('mailto:');
+export default function PricingPreviewCard({ name, price, badge, features, ctaLabel, ctaHref, isElite, isPopular, compliance }) {
+  const useAnchor = ctaHref?.startsWith('mailto:') || ctaHref?.startsWith('/contact-sales');
 
   const cardClass = [
     'bg-white rounded-xl p-6 flex flex-col shadow-sm relative',
@@ -34,13 +34,19 @@ export default function PricingPreviewCard({ name, price, badge, features, ctaLa
         </span>
       )}
 
-      <div className="mb-5">
+      <div className="mb-4">
         <h3 className={`text-lg font-bold mb-1 ${isElite ? 'text-[#b8962f]' : 'text-slate-900'}`}>{name}</h3>
         <div className="flex items-baseline gap-1">
           <span className="text-3xl font-bold text-slate-900">{price}</span>
           <span className="text-sm text-slate-500">/mo</span>
         </div>
       </div>
+
+      {compliance && (
+        <p className={`text-xs mb-3 -mt-1 ${isElite ? 'text-[#b8962f] font-medium' : 'text-slate-500'}`}>
+          {compliance}
+        </p>
+      )}
 
       <ul className="space-y-2 flex-1 mb-6">
         {features.map((f, i) => (
@@ -51,7 +57,7 @@ export default function PricingPreviewCard({ name, price, badge, features, ctaLa
         ))}
       </ul>
 
-      {isMailto ? (
+      {useAnchor ? (
         <a href={ctaHref} className={ctaClass} style={ctaStyle}>
           {ctaLabel}
         </a>
