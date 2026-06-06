@@ -62,6 +62,20 @@ const DAY_LABELS = {
   sun: 'Sun',
 };
 
+function StepWrapper({ step, children }) {
+  return (
+    <Card className="max-w-3xl mx-auto mt-10 shadow-lg">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          {React.createElement(STEPS[step].icon, { className: 'w-5 h-5 text-blue-600' })}
+          {STEPS[step].name}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
+  );
+}
+
 function CopyButton({ text, label = 'Copy' }) {
   const [copied, setCopied] = useState(false);
 
@@ -314,18 +328,6 @@ export default function OnboardingWizard() {
     }
   };
 
-  const StepWrapper = ({ children }) => (
-    <Card className="max-w-3xl mx-auto mt-10 shadow-lg">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          {React.createElement(STEPS[step].icon, { className: 'w-5 h-5 text-blue-600' })}
-          {STEPS[step].name}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
-  );
-
   return (
     <div className="p-6">
       {/* Step Navigation */}
@@ -344,7 +346,7 @@ export default function OnboardingWizard() {
 
       {/* Step 0 — Welcome */}
       {step === 0 && (
-        <StepWrapper>
+        <StepWrapper step={step}>
           <p className="text-gray-700 mb-4">
             Welcome to Dental AI! Let's get your practice set up.
           </p>
@@ -354,7 +356,7 @@ export default function OnboardingWizard() {
 
       {/* Step 1 — Practice Basics */}
       {step === 1 && (
-        <StepWrapper>
+        <StepWrapper step={step}>
           <div className="space-y-4">
             <div>
               <Label>Practice Name</Label>
@@ -489,7 +491,7 @@ export default function OnboardingWizard() {
 
       {/* Step 2 — Hours */}
       {step === 2 && (
-        <StepWrapper>
+        <StepWrapper step={step}>
           <div className="space-y-4">
             {DAY_KEYS.map((day) => (
               <div key={day} className="flex items-center gap-4">
@@ -575,7 +577,7 @@ export default function OnboardingWizard() {
 
       {/* Step 3 — Providers */}
       {step === 3 && (
-        <StepWrapper>
+        <StepWrapper step={step}>
           <div className="space-y-4">
             <div className="flex gap-4">
               <Input
@@ -633,7 +635,7 @@ export default function OnboardingWizard() {
 
       {/* Step 4 — Appointment Types */}
       {step === 4 && (
-        <StepWrapper>
+        <StepWrapper step={step}>
           <div className="space-y-4">
             <div className="flex gap-4">
               <Input
@@ -694,7 +696,7 @@ export default function OnboardingWizard() {
       )}
 {/* Step 5 — Branding */}
 {step === 5 && (
-  <StepWrapper>
+  <StepWrapper step={step}>
     <div className="space-y-4">
       <div>
         <Label>AI Receptionist Name</Label>
@@ -759,7 +761,7 @@ export default function OnboardingWizard() {
 
       {/* Step 6 — Emergency Rules */}
       {step === 6 && (
-        <StepWrapper>
+        <StepWrapper step={step}>
           <div className="space-y-4">
             <div>
               <Label>Emergency Trigger Keywords</Label>
@@ -823,7 +825,7 @@ export default function OnboardingWizard() {
 
       {/* Step 7 — Retell Setup */}
       {step === 7 && (
-        <StepWrapper>
+        <StepWrapper step={step}>
           <div className="space-y-4">
             <p className="text-gray-700">
               Connect your Retell voice agent. This enables phone call automation.
@@ -876,7 +878,7 @@ export default function OnboardingWizard() {
 
       {/* Step 8 — Test & Finish */}
       {step === 8 && (
-        <StepWrapper>
+        <StepWrapper step={step}>
           <div className="space-y-4">
             <p className="text-gray-700">
               Your practice setup is complete! You can now test your AI receptionist
