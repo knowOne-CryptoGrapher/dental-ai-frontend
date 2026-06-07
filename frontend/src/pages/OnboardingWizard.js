@@ -177,6 +177,22 @@ export default function OnboardingWizard() {
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
   const handleSignup = async () => {
+    if (!signup.practice_name.trim()) {
+      toast.error('Practice name is required');
+      return;
+    }
+    if (!signup.admin_full_name.trim()) {
+      toast.error('Full name is required');
+      return;
+    }
+    if (!signup.admin_email.trim() || !signup.admin_email.includes('@')) {
+      toast.error('A valid email address is required');
+      return;
+    }
+    if (!signup.admin_password || signup.admin_password.length < 8) {
+      toast.error('Password must be at least 8 characters');
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -243,8 +259,12 @@ export default function OnboardingWizard() {
     if (!newType.name) return;
     setSaving(true);
     try {
-      const res = await api.post(`/practice/${user?.practice_id}/appointment-types`, newType);
-      setApptTypes([...apptTypes, res.data]);
+      const typeToSend = {
+        ...newType,
+        id: newType.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '-' + Date.now(),
+      };
+      const res = await api.post(`/practice/${user?.practice_id}/appointment-types`, typeToSend);
+      setApptTypes(res.data);
       setNewType({ id: '', name: '', duration_min: 30 });
       toast.success('Appointment type added');
     } catch (err) {
@@ -297,36 +317,14 @@ export default function OnboardingWizard() {
     }
   };
 
-  const loadRetellPrompt = async () => {
-    try {
-      const res = await api.get(`/agent/${user?.practice_id}/prompt`);
-      setRetellPayload(res.data);
-    } catch (err) {
-      console.error('Failed to load Retell prompt:', err);
-      toast.error(err?.response?.data?.detail || 'Failed to load Retell prompt');
-    }
-  };
-
-  const saveRetell = async () => {
-    setSaving(true);
-    try {
-      await api.put(`/practice/${user?.practice_id}/config`, {
-        retell: { agent_id: retellAgentId, phone_number: retellPhone },
-      });
-      toast.success('Retell settings saved');
-      next();
-    } catch (err) {
-      console.error('Failed to save Retell settings:', err);
-      toast.error(err?.response?.data?.detail || 'Failed to save Retell settings');
-    } finally {
-      setSaving(false);
-    }
+  const saveRetell = () => {
+    next();
   };
 
   const finish = async () => {
     setSaving(true);
     try {
-      await completeOnboarding();
+      await completeOnboarding(user?.practice_id);
       toast.success('Onboarding complete!');
       navigate('/dashboard');
     } catch (err) {
@@ -837,14 +835,17 @@ export default function OnboardingWizard() {
         <StepWrapper step={step}>
           <div className="space-y-4">
             <p className="text-gray-700">
-              Connect your Retell voice agent. This enables phone call automation.
+              Retell configuration is completed by your Dental AI onboarding team.
+              Your agent ID and phone number will be configured before go-live. You
+              can update these settings later from your dashboard once your account
+              is activated.
             </p>
 
             <div>
               <Label>Retell Agent ID</Label>
               <Input
                 value={retellAgentId}
-                onChange={(e) => setRetellAgentId(e.target.value)}
+                disabled
               />
             </div>
 
@@ -852,24 +853,9 @@ export default function OnboardingWizard() {
               <Label>Retell Phone Number</Label>
               <Input
                 value={retellPhone}
-                onChange={(e) => setRetellPhone(e.target.value)}
+                disabled
               />
             </div>
-
-            <div>
-              <Button variant="outline" onClick={loadRetellPrompt}>
-                Load Retell Prompt
-              </Button>
-            </div>
-
-            {retellPayload && (
-              <div className="p-3 border rounded bg-gray-50">
-                <pre className="text-xs whitespace-pre-wrap">
-                  {JSON.stringify(retellPayload, null, 2)}
-                </pre>
-                <CopyButton text={JSON.stringify(retellPayload, null, 2)} />
-              </div>
-            )}
 
             <div className="flex justify-between">
               <Button variant="outline" onClick={back}>
