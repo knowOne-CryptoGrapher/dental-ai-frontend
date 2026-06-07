@@ -52,6 +52,15 @@ export default function Layout({ children, notifications = [], onNotificationRea
         upgradeFeature: 'Insurance',
         upgradeTier: 'Professional',
       });
+      items.push({
+        path: '/claims',
+        label: 'Claims',
+        icon: FileText,
+        section: 'Main',
+        locked: !featuresLoading && !has('insurance'),
+        upgradeFeature: 'Insurance Claims',
+        upgradeTier: 'Professional',
+      });
     }
 
     // Analytics — always visible; locked (shows upgrade prompt) when plan lacks it

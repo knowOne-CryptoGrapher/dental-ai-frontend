@@ -13,6 +13,7 @@ import CallLogsPage from "./pages/CallLogsPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import SettingsPage from "./pages/SettingsPage";
 import InsurancePage from "./pages/InsurancePage";
+import ClaimsPage from "./pages/ClaimsPage";
 import ManagePage from "./pages/ManagePage";
 import BillingPage from "./pages/BillingPage";
 import AuditPage from "./pages/AuditPage";
@@ -180,6 +181,7 @@ function AppContent() {
       <Route path="/settings" element={<PracticePage component={SettingsPage} />} />
       <Route path="/practice-settings" element={<PracticePage component={PracticeSettingsPage} />} />
       <Route path="/insurance" element={<PracticePage component={InsurancePage} />} />
+      <Route path="/claims" element={<PracticePage component={ClaimsPage} />} />
       <Route path="/manage" element={<PracticePage component={ManagePage} />} />
       <Route path="/billing" element={<PracticePage component={BillingPage} />} />
       <Route path="/audit" element={<PracticePage component={AuditPage} />} />
