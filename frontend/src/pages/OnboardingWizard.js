@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Check,
   Copy,
@@ -99,18 +99,22 @@ function CopyButton({ text, label = 'Copy' }) {
   );
 }
 
-export default function OnboardingWizard() {
+export default function OnboardingWizard({ mode = 'signup' }) {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     user,
     practice,
-    onboardPractice,
-    completeOnboarding,
+    loadToken,
     refreshPractice,
     isSuperAdmin,
   } = useAuth();
 
-  const [step, setStep] = useState(user && practice ? 2 : 0);
+  const [step, setStep] = useState(
+    mode === 'resume' && practice?.onboarding_step
+      ? Math.min(practice.onboarding_step, STEPS.length - 1)
+      : 0
+  );
   const [saving, setSaving] = useState(false);
 
   const [signup, setSignup] = useState({
@@ -174,6 +178,12 @@ export default function OnboardingWizard() {
     }
   }, [practice]);
 
+  useEffect(() => {
+    if (mode === 'resume' && practice?.onboarding_step != null) {
+      setStep(Math.min(practice.onboarding_step, STEPS.length - 1));
+    }
+  }, [practice?.onboarding_step, mode]);
+
   const next = () => setStep((s) => Math.min(s + 1, STEPS.length - 1));
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
@@ -202,13 +212,31 @@ export default function OnboardingWizard() {
 
     setSaving(true);
     try {
-      const payload = {
-        ...signup,
+      // Call 1: create admin user account (no practice yet)
+      const signupRes = await api.post('/auth/signup', {
+        email: signup.admin_email,
+        password: signup.admin_password,
+        full_name: signup.admin_full_name,
+        contact_phone: signup.contact_phone,
+      });
+      // Write token to localStorage immediately — api interceptor uses it for Call 2
+      localStorage.setItem('dental_token', signupRes.data.access_token);
+
+      // Call 2: create practice (authenticated with token from Call 1)
+      const practiceRes = await api.post('/practices', {
+        name: signup.practice_name,
+        province: signup.province,
+        timezone: signup.timezone || 'America/Toronto',
+        contact_phone: signup.contact_phone,
+        plan: searchParams.get('plan') || 'basic',
         accepted_terms_version: TERMS_VERSION,
         accepted_privacy_version: PRIVACY_POLICY_VERSION,
         accepted_at: new Date().toISOString(),
-      };
-      await onboardPractice(payload);
+      });
+
+      // Store the refreshed token (now contains practice_id) and re-auth
+      loadToken(practiceRes.data.access_token);
+      setSearchParams({}, { replace: true });
       toast.success('Practice created!');
       next();
     } catch (err) {
@@ -248,6 +276,11 @@ export default function OnboardingWizard() {
     setSaving(true);
     try {
       await api.put(`/practice/${user?.practice_id}/hours`, hours);
+      try {
+        await api.patch(`/practices/${user?.practice_id}/onboarding-step`, { onboarding_step: step + 1 });
+      } catch (patchErr) {
+        console.error('Failed to update onboarding step:', patchErr);
+      }
       toast.success('Hours saved');
       next();
     } catch (err) {
@@ -322,10 +355,39 @@ export default function OnboardingWizard() {
     }
   };
 
+  const handleProvidersContinue = async () => {
+    try {
+      await api.patch(
+        `/practices/${user?.practice_id}/onboarding-step`,
+        { onboarding_step: step + 1 }
+      );
+    } catch (err) {
+      console.error('Failed to update onboarding step:', err);
+    }
+    next();
+  };
+
+  const handleApptTypesContinue = async () => {
+    try {
+      await api.patch(
+        `/practices/${user?.practice_id}/onboarding-step`,
+        { onboarding_step: step + 1 }
+      );
+    } catch (err) {
+      console.error('Failed to update onboarding step:', err);
+    }
+    next();
+  };
+
   const saveBranding = async () => {
     setSaving(true);
     try {
       await api.put(`/practice/${user?.practice_id}/branding`, branding);
+      try {
+        await api.patch(`/practices/${user?.practice_id}/onboarding-step`, { onboarding_step: step + 1 });
+      } catch (patchErr) {
+        console.error('Failed to update onboarding step:', patchErr);
+      }
       toast.success('Branding saved');
       next();
     } catch (err) {
@@ -340,6 +402,11 @@ export default function OnboardingWizard() {
     setSaving(true);
     try {
       await api.put(`/practice/${user?.practice_id}/emergency-rules`, emergency);
+      try {
+        await api.patch(`/practices/${user?.practice_id}/onboarding-step`, { onboarding_step: step + 1 });
+      } catch (patchErr) {
+        console.error('Failed to update onboarding step:', patchErr);
+      }
       toast.success('Emergency rules saved');
       next();
     } catch (err) {
@@ -350,19 +417,28 @@ export default function OnboardingWizard() {
     }
   };
 
-  const saveRetell = () => {
+  const saveRetell = async () => {
+    try {
+      await api.patch(
+        `/practices/${user?.practice_id}/onboarding-step`,
+        { onboarding_step: step + 1 }
+      );
+    } catch (err) {
+      console.error('Failed to update onboarding step:', err);
+    }
     next();
   };
 
   const finish = async () => {
     setSaving(true);
     try {
-      await completeOnboarding(user?.practice_id);
+      await api.post(`/practices/${user?.practice_id}/complete-onboarding`);
+      await refreshPractice();
       toast.success('Onboarding complete!');
       navigate('/dashboard');
     } catch (err) {
-      console.error('Failed to finish onboarding:', err);
-      toast.error(err?.response?.data?.detail || 'Failed to finish onboarding');
+      console.error('Failed to complete onboarding:', err);
+      toast.error(err?.response?.data?.detail || 'Failed to complete onboarding');
     } finally {
       setSaving(false);
     }
@@ -702,7 +778,7 @@ export default function OnboardingWizard() {
                 <ChevronLeft className="w-4 h-4 mr-1" />
                 Back
               </Button>
-              <Button onClick={next}>
+              <Button onClick={handleProvidersContinue}>
                 Continue
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
@@ -764,7 +840,7 @@ export default function OnboardingWizard() {
                 <ChevronLeft className="w-4 h-4 mr-1" />
                 Back
               </Button>
-              <Button onClick={next}>
+              <Button onClick={handleApptTypesContinue}>
                 Continue
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>

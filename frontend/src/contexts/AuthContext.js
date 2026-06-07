@@ -128,6 +128,11 @@ export function AuthProvider({ children }) {
     return me.data;
   };
 
+  const loadToken = useCallback((newToken) => {
+    localStorage.setItem(TOKEN_KEY, newToken);
+    setToken(newToken);
+  }, []);
+
   const logout = () => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(SUPER_TOKEN_KEY);
@@ -155,7 +160,7 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={{
       user, practice, token, loading,
-      login, register, logout, updateUser, axiosAuth, API,
+      login, register, logout, loadToken, updateUser, axiosAuth, API,
       onboardPractice, completeOnboarding, refreshPractice,
       startImpersonation, exitImpersonation, isImpersonating,
       isSuperAdmin, isAdmin, isStaff, isProvider, isAuditor,

@@ -144,7 +144,7 @@ export default function LandingPage() {
                 Login
               </Link>
               <Link
-                to="/signup"
+                to="/pricing"
                 className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2 rounded-md transition-colors"
               >
                 Start Free Trial
@@ -177,7 +177,7 @@ export default function LandingPage() {
                 Login
               </Link>
               <Link
-                to="/signup"
+                to="/pricing"
                 className="block bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2.5 rounded-md transition-colors text-center"
                 onClick={() => setMobileOpen(false)}
               >
@@ -201,7 +201,7 @@ export default function LandingPage() {
               </p>
               <div className="flex flex-col sm:flex-row gap-3 mb-10">
                 <Link
-                  to="/signup"
+                  to="/pricing"
                   className="bg-teal-600 hover:bg-teal-700 text-white font-semibold px-6 py-3 rounded-md transition-colors text-center text-sm"
                 >
                   Start Free Trial
@@ -389,7 +389,7 @@ export default function LandingPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link
-              to="/signup"
+              to="/pricing"
               className="border-2 border-white text-white hover:bg-white hover:text-teal-600 font-semibold px-6 py-3 rounded-md transition-colors text-sm"
             >
               Start Free Trial

@@ -151,11 +151,21 @@ function AppContent() {
       <Route path="/invite/:token" element={<InvitePage />} />
 
       <Route path="/login" element={user ? <Navigate to={homeFor()} replace /> : <LoginPage />} />
-      <Route path="/signup" element={<OnboardingWizard />} />
+
+      {/* Unauthenticated only — new signups */}
+      <Route path="/signup" element={
+        user
+          ? <Navigate to="/onboarding" replace />
+          : <OnboardingWizard mode="signup" />
+      } />
+
+      {/* Authenticated only — resume onboarding */}
       <Route path="/onboarding" element={
-        <PracticeRoute allowOnboarding={true}>
-          <OnboardingWizard />
-        </PracticeRoute>
+        !user
+          ? <Navigate to="/signup" replace />
+          : practice?.status === 'active'
+            ? <Navigate to="/dashboard" replace />
+            : <OnboardingWizard mode="resume" />
       } />
 
       {/* Practice Portal — clinic admins, staff, providers, auditors */}

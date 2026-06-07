@@ -403,7 +403,7 @@ export default function PricingPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link
-              to="/signup"
+              to="/pricing"
               className="border-2 border-white text-white hover:bg-white hover:text-teal-600 font-semibold px-6 py-3 rounded-md transition-colors text-sm"
             >
               Start Free Trial

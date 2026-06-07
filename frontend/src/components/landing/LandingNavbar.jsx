@@ -21,7 +21,7 @@ export default function LandingNavbar() {
               Login
             </Link>
             <Link
-              to="/signup"
+              to="/pricing"
               className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2 rounded-md transition-colors"
             >
               Start Free Trial
@@ -54,7 +54,7 @@ export default function LandingNavbar() {
               Login
             </Link>
             <Link
-              to="/signup"
+              to="/pricing"
               className="block bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2.5 rounded-md transition-colors text-center"
               onClick={() => setMobileOpen(false)}
             >
