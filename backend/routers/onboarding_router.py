@@ -4,7 +4,7 @@ import logging
 import uuid
 import os
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 
 from models import OnboardingRequest, default_practice_settings
 from auth import get_db, hash_password, create_access_token, log_audit_event
@@ -53,8 +53,11 @@ def _function_urls(base: str) -> dict:
 
 
 @router.post("/practice")
-async def onboard_practice(req: OnboardingRequest, request: Request):
+async def onboard_practice(req: OnboardingRequest, request: Request, response: Response):
     """
+    DEPRECATED — use POST /api/auth/signup followed by POST /api/practices instead.
+
+    Compatibility wrapper kept until frontend migration is complete.
     Create a practice + admin user in one call.
     Seeds default hours, appointment types, emergency rules, branding.
     Returns a JWT + the rendered Retell setup payload.
@@ -201,6 +204,10 @@ async def onboard_practice(req: OnboardingRequest, request: Request):
     # Build URLs using your new domain
     base = _backend_base(str(request.url))
     urls = _function_urls(base)
+
+    # Signal to callers that this endpoint is deprecated.
+    response.headers["Deprecation"] = "true"
+    response.headers["Link"] = '</api/auth/signup>; rel="successor-version"'
 
     return {
         "practice_id": practice_id,

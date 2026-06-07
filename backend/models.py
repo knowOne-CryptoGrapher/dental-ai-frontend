@@ -34,6 +34,17 @@ class PracticeCreate(BaseModel):
     default_timezone: str = "America/Toronto"
     province: Optional[str] = None          # Two-letter Canadian province code
 
+class PracticeOnboardingCreate(BaseModel):
+    """Body for POST /practices — creates a practice during the onboarding wizard."""
+    name: str
+    province: str
+    timezone: str = "America/Toronto"
+    contact_phone: Optional[str] = None
+    plan: str = "basic"
+    accepted_terms_version: str
+    accepted_privacy_version: str
+    accepted_at: str
+
 class Location(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -123,6 +134,13 @@ class UserRegister(BaseModel):
 class UserLogin(BaseModel):
     email: str
     password: str
+
+class SignupRequest(BaseModel):
+    """Body for POST /auth/signup — creates an admin user before a practice exists."""
+    email: EmailStr
+    password: str
+    full_name: str
+    contact_phone: Optional[str] = None
 
 class UserInvite(BaseModel):
     email: EmailStr

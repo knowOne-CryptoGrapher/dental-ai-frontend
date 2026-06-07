@@ -4,10 +4,10 @@ from datetime import datetime, timezone
 import logging
 
 import os
-from models import PracticeCreate, LocationCreate, ProviderCreate
+from models import PracticeCreate, LocationCreate, ProviderCreate, PracticeOnboardingCreate, default_practice_settings
 from auth import (
     get_db, get_current_user, require_role, require_practice_access,
-    require_practice_scope, log_audit_event,
+    require_practice_scope, log_audit_event, create_access_token,
 )
 from plans import enforce_plan_limit
 from regions.region_config import derive_region, DB_CLUSTER_LABELS, COMPUTE_REGION_LABELS
@@ -55,6 +55,162 @@ async def get_practice_meta(
     return {
         "practice_id": practice_id,
         "home_region": home_region,
+    }
+
+
+# ==== ONBOARDING PRACTICE ENDPOINTS ====
+
+_VALID_PLANS = {"basic", "professional", "enterprise", "elite"}
+
+
+@router.post("/practices")
+async def create_practice_onboarding(
+    data: PracticeOnboardingCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Create a new practice for the authenticated user during onboarding.
+    Issues a refreshed JWT that contains the new practice_id.
+    """
+    if data.plan not in _VALID_PLANS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid plan. Must be one of: {', '.join(sorted(_VALID_PLANS))}",
+        )
+
+    try:
+        home_region = derive_region(data.province)
+        region_fields = {
+            "province":       data.province.strip().upper(),
+            "home_region":    home_region.value,
+            "db_cluster":     DB_CLUSTER_LABELS[home_region],
+            "compute_region": os.getenv("COMPUTE_REGION", "northamerica-west2"),
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    db = get_db()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    practice_id = str(uuid.uuid4())
+
+    defaults = default_practice_settings()
+    defaults["hours"]["timezone"] = data.timezone
+    defaults["branding"]["greeting"] = (
+        f"Thank you for calling {data.name}! This is "
+        f"{defaults['branding']['agent_name']}. How can I help today?"
+    )
+
+    practice_doc = {
+        "id":                      practice_id,
+        "owner_user_id":           current_user["id"],
+        "name":                    data.name,
+        "contact_phone":           data.contact_phone,
+        "status":                  "onboarding",
+        "billing_status":          "active",
+        "subscription_plan":       data.plan,
+        "onboarding_step":         1,
+        "onboarding_completed_at": None,
+        "default_timezone":        data.timezone,
+        "default_retention_years": 7,
+        "settings":                defaults,
+        "accepted_terms_version":  data.accepted_terms_version,
+        "accepted_privacy_version": data.accepted_privacy_version,
+        "accepted_at":             data.accepted_at,
+        "created_at":              now_iso,
+        **region_fields,
+    }
+    await db.practices.insert_one(practice_doc)
+
+    await db.locations.insert_one({
+        "id":          str(uuid.uuid4()),
+        "practice_id": practice_id,
+        "name":        "Main Office",
+        "timezone":    data.timezone,
+        "is_active":   True,
+        "created_at":  now_iso,
+    })
+
+    await db.billing_customers.insert_one({
+        "id":                 str(uuid.uuid4()),
+        "practice_id":        practice_id,
+        "stripe_customer_id": f"cus_mock_{practice_id[:8]}",
+        "plan":               data.plan,
+        "status":             "active",
+        "created_at":         now_iso,
+    })
+
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"practice_id": practice_id}},
+    )
+
+    new_token = create_access_token(data={
+        "sub":         current_user["id"],
+        "practice_id": practice_id,
+        "role":        current_user.get("role", "admin"),
+    })
+
+    return {
+        "access_token": new_token,
+        "token_type":   "bearer",
+        "practice":     {k: v for k, v in practice_doc.items() if k != "_id"},
+    }
+
+
+@router.patch("/practices/{practice_id}/onboarding-step")
+async def update_onboarding_step(
+    practice_id: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """Persist the wizard's current step so the session can be resumed."""
+    if current_user.get("practice_id") != practice_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    body = await request.json()
+    step = body.get("onboarding_step")
+    if not isinstance(step, int) or step < 0 or step > 999:
+        raise HTTPException(
+            status_code=400,
+            detail="onboarding_step must be an integer between 0 and 999",
+        )
+
+    db = get_db()
+    result = await db.practices.update_one(
+        {"id": practice_id},
+        {"$set": {"onboarding_step": step}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Practice not found")
+
+    return {"onboarding_step": step}
+
+
+@router.post("/practices/{practice_id}/complete-onboarding")
+async def complete_practice_onboarding(
+    practice_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Mark onboarding complete: set step=999, timestamp, and status=active."""
+    if current_user.get("practice_id") != practice_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    db = get_db()
+    now = datetime.now(timezone.utc)
+    result = await db.practices.update_one(
+        {"id": practice_id},
+        {"$set": {
+            "onboarding_step":         999,
+            "onboarding_completed_at": now.isoformat(),
+            "status":                  "active",
+        }},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Practice not found")
+
+    return {
+        "success": True,
+        "onboarding_completed_at": now.isoformat(),
     }
 
 

@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timezone
 import logging
 
-from models import UserRegister, UserLogin, UserInvite, PracticeCreate
+from models import UserRegister, UserLogin, UserInvite, PracticeCreate, SignupRequest
 from auth import (
     get_db, hash_password, verify_password, create_access_token,
     get_current_user, require_role, log_audit_event, log_security_event,
@@ -31,6 +31,50 @@ def _user_response(user: dict) -> dict:
         "impersonated_by": user.get("impersonated_by"),
         "impersonator_email": user.get("impersonator_email"),
     }
+
+
+@router.post("/signup")
+async def signup(data: SignupRequest):
+    """
+    Create a new admin user account without a practice.
+    The practice is created separately via POST /api/practices.
+    Returns a JWT that can be used immediately to call POST /api/practices.
+    """
+    try:
+        db = get_db()
+        if await db.users.find_one({"email": data.email}):
+            raise HTTPException(status_code=409, detail="Email already registered")
+
+        user_id = str(uuid.uuid4())
+        user_doc = {
+            "id": user_id,
+            "email": data.email,
+            "password_hash": hash_password(data.password),
+            "full_name": data.full_name,
+            "contact_phone": data.contact_phone,
+            "practice_id": None,
+            "role": "admin",
+            "is_active": True,
+            "onboarding_completed": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.users.insert_one(user_doc)
+
+        token = create_access_token(data={
+            "sub": user_id,
+            "practice_id": None,
+            "role": "admin",
+        })
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "user": _user_response(user_doc),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("signup_error", extra={"error": str(e)})
+        raise HTTPException(status_code=500, detail="Signup failed")
 
 
 @router.post("/register")
