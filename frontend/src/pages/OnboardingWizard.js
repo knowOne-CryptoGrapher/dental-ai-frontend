@@ -193,6 +193,18 @@ export default function OnboardingWizard() {
       toast.error('Password must be at least 8 characters');
       return;
     }
+    if (!signup.province) {
+      toast.error('Please select a province or territory');
+      return;
+    }
+    if (!acceptedTerms) {
+      toast.error('You must accept the Terms & Conditions');
+      return;
+    }
+    if (!acceptedPrivacy) {
+      toast.error('You must accept the Privacy Policy');
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -205,7 +217,7 @@ export default function OnboardingWizard() {
       toast.success('Practice created!');
       next();
     } catch (err) {
-      toast.error(err.message || 'Signup failed');
+      toast.error(err?.response?.data?.detail || err.message || 'Signup failed');
     } finally {
       setSaving(false);
     }
@@ -486,7 +498,7 @@ export default function OnboardingWizard() {
               </Button>
               <Button
                 onClick={handleSignup}
-                disabled={!acceptedTerms || !acceptedPrivacy || !signup.province || saving}
+                disabled={saving}
               >
                 {saving ? <Loader2 className="animate-spin" /> : 'Save & Continue'}
                 <ChevronRight className="w-4 h-4 ml-1" />
