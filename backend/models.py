@@ -15,6 +15,8 @@ class Practice(BaseModel):
     billing_status: str = "active"  # active, past_due, cancelled
     stripe_customer_id: Optional[str] = None
     subscription_plan: str = "basic"  # basic, professional, enterprise, elite
+    onboarding_step: int = 0
+    onboarding_completed_at: Optional[datetime] = None
     default_timezone: str = "America/Toronto"
     default_retention_years: int = 7
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
