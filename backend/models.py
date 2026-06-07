@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import Optional, List
+from enum import Enum
 import uuid
 from datetime import datetime, timezone
 
@@ -340,6 +341,58 @@ class ClaimSubmit(BaseModel):
     provider_id: Optional[str] = None
     appointment_id: Optional[str] = None
     procedures: List[dict] = []
+
+
+# ==== CDANET / ITRANS CLAIM MODELS ====
+
+class ClaimStatus(str, Enum):
+    pending = "pending"
+    submitted = "submitted"
+    accepted = "accepted"
+    rejected = "rejected"
+    error = "error"
+
+
+class Claim(BaseModel):
+    id: str
+    practice_id: str
+    patient_id: str
+    provider_id: str
+    appointment_id: Optional[str] = None
+    cdanet_payload: Optional[str] = None
+    itrans_envelope: Optional[str] = None
+    itrans_response: Optional[str] = None
+    status: ClaimStatus = ClaimStatus.pending
+    error_code: Optional[str] = None
+    error_message: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+# Note: ClaimCreate already exists above (insurance endpoint body).
+# CdanetClaimCreate is the CDAnet-specific create request.
+class CdanetClaimCreate(BaseModel):
+    patient_id: str
+    provider_id: str
+    appointment_id: Optional[str] = None
+    procedure_codes: List[str]
+    service_date: str
+    diagnosis_code: Optional[str] = None
+    tooth_code: Optional[str] = None
+    surface_codes: Optional[str] = None
+    fee: float
+    carrier_id: Optional[str] = None
+
+
+class ClaimResponse(BaseModel):
+    id: str
+    practice_id: str
+    status: ClaimStatus
+    error_code: Optional[str] = None
+    error_message: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
 
 # ==== AI / PENDING ACTIONS ====
 

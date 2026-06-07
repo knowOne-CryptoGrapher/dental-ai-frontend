@@ -43,6 +43,7 @@ from routers.analytics_router import router as analytics_router
 from routers.appointment_router import router as appointment_router
 from routers.calllog_router import router as calllog_router
 from routers.insurance_router import router as insurance_router
+from routers.claims_router import router as claims_router
 from routers.patient_router import router as patient_router
 from routers.practice_router import router as practice_router
 from routers.practice_config_router import router as practice_config_router
@@ -294,6 +295,7 @@ app.include_router(analytics_router)
 app.include_router(appointment_router)
 app.include_router(calllog_router)
 app.include_router(insurance_router)
+app.include_router(claims_router, prefix="/api/claims", tags=["claims"])
 app.include_router(patient_router)
 app.include_router(practice_router)
 app.include_router(practice_config_router)
