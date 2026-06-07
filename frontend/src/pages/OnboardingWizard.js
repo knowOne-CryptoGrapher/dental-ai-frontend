@@ -124,6 +124,7 @@ export default function OnboardingWizard() {
   });
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
+  const [signupErrors, setSignupErrors] = useState({});
 
   const [hours, setHours] = useState({
     timezone: 'America/Toronto',
@@ -177,34 +178,28 @@ export default function OnboardingWizard() {
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
   const handleSignup = async () => {
-    if (!signup.practice_name.trim()) {
-      toast.error('Practice name is required');
+    const errors = {};
+    if (!signup.practice_name.trim())
+      errors.practice_name = 'Practice name is required';
+    if (!signup.admin_full_name.trim())
+      errors.admin_full_name = 'Full name is required';
+    if (!signup.admin_email.trim() || !signup.admin_email.includes('@'))
+      errors.admin_email = 'A valid email address is required';
+    if (!signup.admin_password || signup.admin_password.length < 8)
+      errors.admin_password = 'Password must be at least 8 characters';
+    if (!signup.province)
+      errors.province = 'Please select your province or territory';
+    if (!acceptedTerms)
+      errors.terms = 'You must accept the Terms & Conditions';
+    if (!acceptedPrivacy)
+      errors.privacy = 'You must accept the Privacy Policy';
+
+    if (Object.keys(errors).length > 0) {
+      setSignupErrors(errors);
       return;
     }
-    if (!signup.admin_full_name.trim()) {
-      toast.error('Full name is required');
-      return;
-    }
-    if (!signup.admin_email.trim() || !signup.admin_email.includes('@')) {
-      toast.error('A valid email address is required');
-      return;
-    }
-    if (!signup.admin_password || signup.admin_password.length < 8) {
-      toast.error('Password must be at least 8 characters');
-      return;
-    }
-    if (!signup.province) {
-      toast.error('Please select a province or territory');
-      return;
-    }
-    if (!acceptedTerms) {
-      toast.error('You must accept the Terms & Conditions');
-      return;
-    }
-    if (!acceptedPrivacy) {
-      toast.error('You must accept the Privacy Policy');
-      return;
-    }
+    setSignupErrors({});
+
     setSaving(true);
     try {
       const payload = {
@@ -217,7 +212,33 @@ export default function OnboardingWizard() {
       toast.success('Practice created!');
       next();
     } catch (err) {
-      toast.error(err?.response?.data?.detail || err.message || 'Signup failed');
+      console.error('Signup failed:', err);
+      const detail = err?.response?.data?.detail;
+
+      if (Array.isArray(detail)) {
+        const backendErrors = {};
+        detail.forEach((e) => {
+          const field = e.loc?.[e.loc.length - 1];
+          if (field) backendErrors[field] = e.msg;
+        });
+        if (Object.keys(backendErrors).length > 0) {
+          setSignupErrors(backendErrors);
+          return;
+        }
+      }
+
+      if (typeof detail === 'string') {
+        if (detail.toLowerCase().includes('email')) {
+          setSignupErrors({ admin_email: detail });
+          return;
+        }
+        if (detail.toLowerCase().includes('practice')) {
+          setSignupErrors({ practice_name: detail });
+          return;
+        }
+      }
+
+      toast.error(typeof detail === 'string' ? detail : 'Signup failed');
     } finally {
       setSaving(false);
     }
@@ -381,20 +402,28 @@ export default function OnboardingWizard() {
               <Label>Practice Name</Label>
               <Input
                 value={signup.practice_name}
-                onChange={(e) =>
-                  setSignup({ ...signup, practice_name: e.target.value })
-                }
+                onChange={(e) => {
+                  setSignup({ ...signup, practice_name: e.target.value });
+                  setSignupErrors((prev) => ({ ...prev, practice_name: undefined }));
+                }}
               />
+              {signupErrors.practice_name && (
+                <p className="text-sm text-red-500 mt-1">{signupErrors.practice_name}</p>
+              )}
             </div>
 
             <div>
               <Label>Admin Full Name</Label>
               <Input
                 value={signup.admin_full_name}
-                onChange={(e) =>
-                  setSignup({ ...signup, admin_full_name: e.target.value })
-                }
+                onChange={(e) => {
+                  setSignup({ ...signup, admin_full_name: e.target.value });
+                  setSignupErrors((prev) => ({ ...prev, admin_full_name: undefined }));
+                }}
               />
+              {signupErrors.admin_full_name && (
+                <p className="text-sm text-red-500 mt-1">{signupErrors.admin_full_name}</p>
+              )}
             </div>
 
             <div>
@@ -402,10 +431,14 @@ export default function OnboardingWizard() {
               <Input
                 type="email"
                 value={signup.admin_email}
-                onChange={(e) =>
-                  setSignup({ ...signup, admin_email: e.target.value })
-                }
+                onChange={(e) => {
+                  setSignup({ ...signup, admin_email: e.target.value });
+                  setSignupErrors((prev) => ({ ...prev, admin_email: undefined }));
+                }}
               />
+              {signupErrors.admin_email && (
+                <p className="text-sm text-red-500 mt-1">{signupErrors.admin_email}</p>
+              )}
             </div>
 
             <div>
@@ -413,10 +446,14 @@ export default function OnboardingWizard() {
               <Input
                 type="password"
                 value={signup.admin_password}
-                onChange={(e) =>
-                  setSignup({ ...signup, admin_password: e.target.value })
-                }
+                onChange={(e) => {
+                  setSignup({ ...signup, admin_password: e.target.value });
+                  setSignupErrors((prev) => ({ ...prev, admin_password: undefined }));
+                }}
               />
+              {signupErrors.admin_password && (
+                <p className="text-sm text-red-500 mt-1">{signupErrors.admin_password}</p>
+              )}
             </div>
 
             <div>
@@ -434,7 +471,10 @@ export default function OnboardingWizard() {
               <select
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500"
                 value={signup.province}
-                onChange={(e) => setSignup({ ...signup, province: e.target.value })}
+                onChange={(e) => {
+                  setSignup({ ...signup, province: e.target.value });
+                  setSignupErrors((prev) => ({ ...prev, province: undefined }));
+                }}
                 required
               >
                 <option value="">Select province…</option>
@@ -445,50 +485,69 @@ export default function OnboardingWizard() {
               <p className="text-xs text-gray-500 mt-1">
                 Determines which Canadian data region your practice is assigned to.
               </p>
+              {signupErrors.province && (
+                <p className="text-sm text-red-500 mt-1">{signupErrors.province}</p>
+              )}
             </div>
 
             <div className="border-t border-gray-100 pt-4 space-y-3">
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
-                  checked={acceptedTerms}
-                  onChange={(e) => setAcceptedTerms(e.target.checked)}
-                  required
-                />
-                <span className="text-sm text-gray-700">
-                  I agree to the{' '}
-                  <a
-                    href="/terms"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-teal-600 hover:underline font-medium"
-                  >
-                    Terms &amp; Conditions
-                  </a>
-                </span>
-              </label>
+              <div>
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                    checked={acceptedTerms}
+                    onChange={(e) => {
+                      setAcceptedTerms(e.target.checked);
+                      setSignupErrors((prev) => ({ ...prev, terms: undefined }));
+                    }}
+                    required
+                  />
+                  <span className="text-sm text-gray-700">
+                    I agree to the{' '}
+                    <a
+                      href="/terms"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-teal-600 hover:underline font-medium"
+                    >
+                      Terms &amp; Conditions
+                    </a>
+                  </span>
+                </label>
+                {signupErrors.terms && (
+                  <p className="text-sm text-red-500 mt-1">{signupErrors.terms}</p>
+                )}
+              </div>
 
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
-                  checked={acceptedPrivacy}
-                  onChange={(e) => setAcceptedPrivacy(e.target.checked)}
-                  required
-                />
-                <span className="text-sm text-gray-700">
-                  I have read and agree to the{' '}
-                  <a
-                    href="/privacy"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-teal-600 hover:underline font-medium"
-                  >
-                    Privacy Policy
-                  </a>
-                </span>
-              </label>
+              <div>
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                    checked={acceptedPrivacy}
+                    onChange={(e) => {
+                      setAcceptedPrivacy(e.target.checked);
+                      setSignupErrors((prev) => ({ ...prev, privacy: undefined }));
+                    }}
+                    required
+                  />
+                  <span className="text-sm text-gray-700">
+                    I have read and agree to the{' '}
+                    <a
+                      href="/privacy"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-teal-600 hover:underline font-medium"
+                    >
+                      Privacy Policy
+                    </a>
+                  </span>
+                </label>
+                {signupErrors.privacy && (
+                  <p className="text-sm text-red-500 mt-1">{signupErrors.privacy}</p>
+                )}
+              </div>
             </div>
 
             <div className="flex justify-between">
