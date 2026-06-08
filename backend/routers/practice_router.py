@@ -196,8 +196,19 @@ async def complete_practice_onboarding(
         raise HTTPException(status_code=403, detail="Access denied")
 
     db = get_db()
+    practice = await db.practices.find_one({"id": practice_id}, {"_id": 0})
+    if not practice:
+        raise HTTPException(status_code=404, detail="Practice not found")
+
+    if practice.get("status") == "active" and practice.get("onboarding_step") == 999:
+        return {
+            "success": True,
+            "onboarding_completed_at": practice.get("onboarding_completed_at"),
+            "already_complete": True,
+        }
+
     now = datetime.now(timezone.utc)
-    result = await db.practices.update_one(
+    await db.practices.update_one(
         {"id": practice_id},
         {"$set": {
             "onboarding_step":         999,
@@ -205,8 +216,6 @@ async def complete_practice_onboarding(
             "status":                  "active",
         }},
     )
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Practice not found")
 
     return {
         "success": True,

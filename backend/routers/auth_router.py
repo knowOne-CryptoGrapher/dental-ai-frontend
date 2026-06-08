@@ -42,8 +42,12 @@ async def signup(data: SignupRequest):
     """
     try:
         db = get_db()
-        if await db.users.find_one({"email": data.email}):
-            raise HTTPException(status_code=409, detail="Email already registered")
+        existing_user = await db.users.find_one({"email": data.email})
+        if existing_user:
+            raise HTTPException(
+                status_code=409,
+                detail="An account with this email already exists. Please log in instead.",
+            )
 
         user_id = str(uuid.uuid4())
         user_doc = {
