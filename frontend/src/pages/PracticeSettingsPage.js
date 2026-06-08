@@ -32,6 +32,7 @@ export default function PracticeSettingsPage() {
   const [branding, setBranding] = useState(null);
   const [hours, setHours] = useState(null);
   const [emergency, setEmergency] = useState(null);
+  const [triggerInput, setTriggerInput] = useState('');
   const [types, setTypes] = useState([]);
   const [newType, setNewType] = useState({ id: '', name: '', duration_min: 30 });
   const [retell, setRetell] = useState(null);
@@ -57,6 +58,7 @@ export default function PracticeSettingsPage() {
         },
       });
       setEmergency(s.emergency || { triggers: [], response_policy: 'earliest_available', after_hours_handoff_phone: '' });
+      setTriggerInput((s.emergency?.triggers || []).join(', '));
       setTypes(s.appointment_types || []);
       setRetell(s.retell || { agent_id: '', phone_number: '' });
     }
@@ -156,8 +158,8 @@ export default function PracticeSettingsPage() {
           <Card><CardHeader><CardTitle>Emergency Rules</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <div><Label>Trigger keywords (comma-separated)</Label>
-                <Input value={emergency.triggers.join(', ')}
-                  onChange={e => setEmergency({ ...emergency, triggers: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} />
+                <Input value={triggerInput}
+                  onChange={e => setTriggerInput(e.target.value)} />
               </div>
               <div><Label>Response policy</Label>
                 <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
@@ -170,8 +172,15 @@ export default function PracticeSettingsPage() {
               <div><Label>After-hours handoff phone</Label>
                 <Input value={emergency.after_hours_handoff_phone || ''} onChange={e => setEmergency({ ...emergency, after_hours_handoff_phone: e.target.value })} />
               </div>
-              <Button data-testid="save-emergency-btn" disabled={saving} onClick={() => save(`/practice/${pid}/emergency-rules`, emergency, 'Emergency rules')}
-                className="bg-teal-600 hover:bg-teal-700">{saving && <Loader2 className="w-4 h-4 mr-1 animate-spin" />} Save</Button>
+              <Button data-testid="save-emergency-btn" disabled={saving} onClick={() => {
+                const triggersArray = triggerInput
+                  .split(',')
+                  .map(s => s.trim())
+                  .filter(Boolean)
+                  .filter(s => s.length <= 50)
+                  .filter((v, i, arr) => arr.indexOf(v) === i);
+                save(`/practice/${pid}/emergency-rules`, { ...emergency, triggers: triggersArray }, 'Emergency rules');
+              }} className="bg-teal-600 hover:bg-teal-700">{saving && <Loader2 className="w-4 h-4 mr-1 animate-spin" />} Save</Button>
             </CardContent>
           </Card>
           </ErrorBoundary>

@@ -59,10 +59,9 @@ function PracticeRoute({ children, allowOnboarding = false }) {
   if (!user) return <Navigate to="/login" replace />;
   if (isSuperAdmin) return <Navigate to="/admin" replace />;
   if (
-    practice?.settings &&
+    practice?.onboarding_complete === false &&
     practice?.status === 'onboarding' &&
     (practice?.onboarding_step ?? 0) < 999 &&
-    (practice?.onboarding_step ?? 0) > 0 &&
     !allowOnboarding
   ) {
     return <Navigate to="/onboarding" replace />;
@@ -138,9 +137,9 @@ function SuperAdminPage({ component: Component, ...props }) {
 function AppContent() {
   const { user, practice, isSuperAdmin } = useAuth();
   const isOnboarding = (
+    practice?.onboarding_complete === false &&
     practice?.status === 'onboarding' &&
-    (practice?.onboarding_step ?? 0) < 999 &&
-    (practice?.onboarding_step ?? 0) > 0
+    (practice?.onboarding_step ?? 0) < 999
   );
 
   // Where authenticated users land
