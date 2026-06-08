@@ -255,6 +255,13 @@ export default function OnboardingWizard({ mode = 'signup' }) {
         }
       }
 
+      if (err?.response?.status === 409) {
+        setSignupErrors({
+          admin_email: detail || 'An account with this email already exists.',
+        });
+        return;
+      }
+
       if (typeof detail === 'string') {
         if (detail.toLowerCase().includes('email')) {
           setSignupErrors({ admin_email: detail });
