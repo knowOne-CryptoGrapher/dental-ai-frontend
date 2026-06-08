@@ -72,10 +72,11 @@ async def create_practice_onboarding(
     Create a new practice for the authenticated user during onboarding.
     Issues a refreshed JWT that contains the new practice_id.
     """
-    if data.plan not in _VALID_PLANS:
+    if not data.plan or data.plan not in _VALID_PLANS:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid plan. Must be one of: {', '.join(sorted(_VALID_PLANS))}",
+            detail=f"A valid subscription plan is required. "
+                   f"Must be one of: {', '.join(sorted(_VALID_PLANS))}",
         )
 
     try:
@@ -110,6 +111,7 @@ async def create_practice_onboarding(
         "subscription_plan":       data.plan,
         "onboarding_step":         1,
         "onboarding_completed_at": None,
+        "onboarding_complete":     False,
         "default_timezone":        data.timezone,
         "default_retention_years": 7,
         "settings":                defaults,
@@ -200,7 +202,11 @@ async def complete_practice_onboarding(
     if not practice:
         raise HTTPException(status_code=404, detail="Practice not found")
 
-    if practice.get("status") == "active" and practice.get("onboarding_step") == 999:
+    if (
+        practice.get("status") == "active" and
+        practice.get("onboarding_step") == 999 and
+        practice.get("onboarding_complete") == True
+    ):
         return {
             "success": True,
             "onboarding_completed_at": practice.get("onboarding_completed_at"),
@@ -213,6 +219,7 @@ async def complete_practice_onboarding(
         {"$set": {
             "onboarding_step":         999,
             "onboarding_completed_at": now.isoformat(),
+            "onboarding_complete":     True,
             "status":                  "active",
         }},
     )

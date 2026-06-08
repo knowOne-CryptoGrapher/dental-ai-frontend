@@ -18,6 +18,7 @@ class Practice(BaseModel):
     subscription_plan: str = "basic"  # basic, professional, enterprise, elite
     onboarding_step: int = 0
     onboarding_completed_at: Optional[datetime] = None
+    onboarding_complete: bool = False
     default_timezone: str = "America/Toronto"
     default_retention_years: int = 7
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -41,7 +42,7 @@ class PracticeOnboardingCreate(BaseModel):
     province: str
     timezone: str = "America/Toronto"
     contact_phone: Optional[str] = None
-    plan: str = "basic"
+    plan: str
     accepted_terms_version: str
     accepted_privacy_version: str
     accepted_at: str

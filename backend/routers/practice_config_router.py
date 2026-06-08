@@ -45,7 +45,7 @@ async def _get_practice_or_404(db, practice_id: str) -> dict:
                 changed = True
             else:
                 for ik, iv in default_v.items():
-                    if ik not in existing or existing[ik] in (None, {}, []):
+                    if ik not in existing or existing[ik] is None:
                         existing[ik] = iv
                         changed = True
         elif isinstance(default_v, list) and isinstance(existing, list):

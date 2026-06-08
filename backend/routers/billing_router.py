@@ -31,7 +31,7 @@ import stripe as stripe_sdk  # raw Stripe SDK
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/billing", tags=["billing"])
 
-STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "").strip()
+STRIPE_API_KEY = os.environ.get("STRIPE_SECRET_KEY", "").strip()
 stripe_sdk.api_key = STRIPE_API_KEY  # used by all Stripe calls
 
 
@@ -39,7 +39,7 @@ def _require_stripe():
   if not STRIPE_API_KEY:
     raise HTTPException(
       status_code=503,
-      detail="Billing not configured. Set STRIPE_API_KEY in backend/.env.",
+      detail="Billing not configured. Set STRIPE_SECRET_KEY in backend/.env.",
     )
 
 
