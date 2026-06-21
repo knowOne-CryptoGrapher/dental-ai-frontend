@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, X, CreditCard, RefreshCw, Shield } from 'lucide-react';
 import {
@@ -6,6 +6,7 @@ import {
 } from '../components/ui/accordian';
 import LandingNavbar from '../components/landing/LandingNavbar';
 import LandingFooter from '../components/landing/LandingFooter';
+import ContactSalesModal from '../components/sales/ContactSalesModal';
 
 // ── Plan data (source: plans.py) ──────────────────────────────────────────────
 
@@ -166,7 +167,7 @@ function Cell({ value, isEliteCol }) {
   );
 }
 
-function PlanCard({ plan }) {
+function PlanCard({ plan, onCtaClick }) {
   const fKey = PLAN_FEATURE_KEY[plan.id];
   const useAnchor = plan.ctaHref?.startsWith('mailto:') || plan.ctaHref?.startsWith('/contact-sales');
 
@@ -244,7 +245,11 @@ function PlanCard({ plan }) {
         })}
       </ul>
 
-      {useAnchor ? (
+      {onCtaClick ? (
+        <button type="button" onClick={onCtaClick} className={ctaCls} style={plan.isElite ? { backgroundColor: '#D4AF37' } : {}}>
+          {plan.ctaLabel}
+        </button>
+      ) : useAnchor ? (
         <a href={plan.ctaHref} className={ctaCls} style={plan.isElite ? { backgroundColor: '#D4AF37' } : {}}>
           {plan.ctaLabel}
         </a>
@@ -260,6 +265,8 @@ function PlanCard({ plan }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function PricingPage() {
+  const [salesModal, setSalesModal] = useState({ open: false, plan: 'enterprise' });
+
   return (
     <div className="min-h-screen bg-white">
       <LandingNavbar />
@@ -294,7 +301,17 @@ export default function PricingPage() {
       <section className="bg-slate-50 py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 items-start">
-            {PLANS.map(plan => <PlanCard key={plan.id} plan={plan} />)}
+            {PLANS.map(plan => (
+              <PlanCard
+                key={plan.id}
+                plan={plan}
+                onCtaClick={
+                  plan.ctaHref?.startsWith('/contact-sales')
+                    ? () => setSalesModal({ open: true, plan: plan.id })
+                    : undefined
+                }
+              />
+            ))}
           </div>
           <p className="text-center text-xs text-slate-400 mt-6">
             All plans billed monthly · Prices in CAD · 14-day free trial on all plans
@@ -417,6 +434,12 @@ export default function PricingPage() {
           </div>
         </div>
       </section>
+
+      <ContactSalesModal
+        isOpen={salesModal.open}
+        onClose={() => setSalesModal(m => ({ ...m, open: false }))}
+        requestedPlan={salesModal.plan}
+      />
 
       <LandingFooter />
     </div>

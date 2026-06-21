@@ -5,6 +5,7 @@ import FeatureCard from '../components/landing/FeatureCard';
 import TestimonialCard from '../components/landing/TestimonialCard';
 import PricingPreviewCard from '../components/landing/PricingPreviewCard';
 import StepCard from '../components/landing/StepCard';
+import ContactSalesModal from '../components/sales/ContactSalesModal';
 
 const FEATURES = [
   {
@@ -125,6 +126,7 @@ const TESTIMONIALS = [
 
 export default function LandingPage() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [salesModal, setSalesModal] = useState({ open: false, plan: 'enterprise' });
 
   return (
     <div className="min-h-screen bg-white">
@@ -338,6 +340,11 @@ export default function LandingPage() {
                 features={plan.features}
                 ctaLabel={plan.ctaLabel}
                 ctaHref={plan.ctaHref}
+                onCtaClick={
+                  plan.ctaHref?.startsWith('/contact-sales')
+                    ? () => setSalesModal({ open: true, plan: plan.name.toLowerCase() })
+                    : undefined
+                }
                 isElite={plan.isElite}
                 isPopular={plan.isPopular}
                 compliance={plan.compliance}
@@ -403,6 +410,12 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      <ContactSalesModal
+        isOpen={salesModal.open}
+        onClose={() => setSalesModal(m => ({ ...m, open: false }))}
+        requestedPlan={salesModal.plan}
+      />
 
       {/* ── FOOTER ── */}
       <footer className="bg-slate-900 py-12">

@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Check } from 'lucide-react';
 
-export default function PricingPreviewCard({ name, price, badge, features, ctaLabel, ctaHref, isElite, isPopular, compliance }) {
+export default function PricingPreviewCard({ name, price, badge, features, ctaLabel, ctaHref, onCtaClick, isElite, isPopular, compliance }) {
   const useAnchor = ctaHref?.startsWith('mailto:') || ctaHref?.startsWith('/contact-sales');
 
   const cardClass = [
@@ -57,7 +57,11 @@ export default function PricingPreviewCard({ name, price, badge, features, ctaLa
         ))}
       </ul>
 
-      {useAnchor ? (
+      {onCtaClick ? (
+        <button type="button" onClick={onCtaClick} className={ctaClass} style={ctaStyle}>
+          {ctaLabel}
+        </button>
+      ) : useAnchor ? (
         <a href={ctaHref} className={ctaClass} style={ctaStyle}>
           {ctaLabel}
         </a>
