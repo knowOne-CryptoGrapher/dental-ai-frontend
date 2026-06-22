@@ -11,6 +11,7 @@ from auth import get_db, hash_password, create_access_token, log_audit_event
 from agent.prompt_renderer import render_amanda_prompt
 from regions.region_config import derive_region, DB_CLUSTER_LABELS
 from config import TERMS_VERSION, PRIVACY_POLICY_VERSION
+from services.email_service import email_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/onboarding", tags=["onboarding"])
@@ -239,5 +240,26 @@ async def complete_onboarding(practice_id: str):
     await db.practices.update_one(
         {"id": practice_id}, {"$set": {"status": "active"}}
     )
+
+    # Send welcome email to the practice admin — non-fatal
+    try:
+        admin = await db.users.find_one(
+            {"practice_id": practice_id, "role": "admin"},
+            {"_id": 0, "email": 1, "full_name": 1},
+        )
+        if admin:
+            await email_service.send(
+                to_email=admin["email"],
+                subject=f"Welcome to Front Desk Dental AI — {practice.get('name', '')} is ready",
+                template_name="onboarding_welcome",
+                template_vars={
+                    "practice_name": practice.get("name", "your practice"),
+                    "admin_name":    admin.get("full_name", "there"),
+                    "dashboard_url": "https://frontdeskdentalai.com/dashboard",
+                },
+                practice_id=practice_id,
+            )
+    except Exception as exc:
+        logger.error(f"complete_onboarding: welcome email failed — {exc}")
 
     return {"practice_id": practice_id, "status": "active"}

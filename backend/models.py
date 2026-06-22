@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict, EmailStr
+from pydantic import BaseModel, Field, ConfigDict, EmailStr, field_validator
 from typing import Optional, List
 from enum import Enum
 import uuid
@@ -72,6 +72,13 @@ class LocationCreate(BaseModel):
     timezone: str = "America/Toronto"
     hours: Optional[dict] = None
 
+class ProviderRole(str, Enum):
+    dentist   = "dentist"
+    hygienist = "hygienist"
+    specialist = "specialist"
+    associate  = "associate"
+    locum      = "locum"
+
 class Provider(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -80,6 +87,7 @@ class Provider(BaseModel):
     user_id: Optional[str] = None  # link to users collection
     name: str
     title: str = "Dr."  # Dr., Hygienist, etc.
+    role: Optional[ProviderRole] = None
     specialties: List[str] = []
     license_number: Optional[str] = None
     itrans_provider_number: Optional[str] = None
@@ -90,7 +98,7 @@ class Provider(BaseModel):
 class ProviderCreate(BaseModel):
     name: str
     title: str = "Dr."
-    role: str = "dentist"  # dentist, hygienist, specialist
+    role: ProviderRole = ProviderRole.dentist
     location_ids: List[str] = []  # Array of locations where provider works
     appointment_types: List[str] = ["Cleaning", "Checkup", "Consultation"]  # Appointment types they handle
     working_hours: dict = {
@@ -149,6 +157,33 @@ class UserInvite(BaseModel):
     full_name: str
     role: str = "staff"  # admin, staff, provider, auditor
     provider_id: Optional[str] = None
+
+# ==== SALES LEADS ====
+
+_VALID_CLINIC_SIZES = {"1-5", "6-15", "16-50", "50+"}
+_VALID_SALES_PLANS  = {"enterprise", "elite"}
+
+class SalesContactRequest(BaseModel):
+    name: str
+    email: EmailStr
+    phone: Optional[str] = None
+    clinic_size: str   # "1-5" | "6-15" | "16-50" | "50+"
+    message: Optional[str] = None
+    requested_plan: str  # "enterprise" | "elite"
+
+    @field_validator("clinic_size")
+    @classmethod
+    def _check_clinic_size(cls, v: str) -> str:
+        if v not in _VALID_CLINIC_SIZES:
+            raise ValueError(f"clinic_size must be one of {sorted(_VALID_CLINIC_SIZES)}")
+        return v
+
+    @field_validator("requested_plan")
+    @classmethod
+    def _check_plan(cls, v: str) -> str:
+        if v not in _VALID_SALES_PLANS:
+            raise ValueError(f"requested_plan must be one of {sorted(_VALID_SALES_PLANS)}")
+        return v
 
 # ==== PATIENT ====
 

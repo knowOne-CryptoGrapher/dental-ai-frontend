@@ -38,7 +38,13 @@ $SECRET_VARS = @(
     "STRIPE_PRICE_ELITE",
     "CA_WEST_DB_URI",
     "CA_EAST_DB_URI",
-    "INTERNAL_API_KEY"
+    "INTERNAL_API_KEY",
+    "SES_ACCESS_KEY_ID",
+    "SES_SECRET_ACCESS_KEY",
+    "SES_REGION",
+    "SES_FROM_EMAIL",
+    "SES_FROM_NAME",
+    "SES_SNS_TOPIC_ARN"
 )
 
 function Write-Step([string]$msg) {

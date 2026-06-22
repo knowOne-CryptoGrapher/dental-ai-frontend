@@ -1,0 +1,27 @@
+Welcome to Front Desk Dental AI!
+======================================================================
+
+Hi $admin_name,
+
+Congratulations — $practice_name is now set up and active on Front Desk Dental AI.
+
+Your AI receptionist is ready to start handling calls, booking appointments,
+and managing your front desk around the clock.
+
+Go to your dashboard:
+  $dashboard_url
+
+Here's what you can do from your dashboard:
+
+  - Review and configure your AI receptionist's responses
+  - Add providers and set their availability
+  - View live call logs and appointment bookings
+  - Invite staff members and manage roles
+  - Set up insurance and billing preferences
+
+Need help getting started? Reply to this email and our team will get back to you.
+
+----------------------------------------------------------------------
+This email was sent by Front Desk Dental AI on behalf of $practice_name.
+$footer_text
+(c) $year Front Desk Dental AI. All rights reserved.

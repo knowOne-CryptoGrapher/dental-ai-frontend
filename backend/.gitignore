@@ -17,6 +17,9 @@ node_modules/
 # Git
 .git/
 
+# Scripts — diagnostic/test output artifacts, never committed
+scripts/*.jsonl
+
 # Local dev
 *.log
 .DS_Store

@@ -99,46 +99,76 @@ class TestRBACEnforcement:
     
     @pytest.fixture
     def staff_user(self, admin_token):
-        """Create a staff user for RBAC testing"""
-        staff_email = f"staff_{uuid.uuid4().hex[:6]}@dentaltest.com"
-        response = requests.post(f"{BASE_URL}/api/auth/invite", 
-            headers={"Authorization": f"Bearer {admin_token}"},
-            json={
-                "email": staff_email,
-                "full_name": "Test Staff",
-                "role": "staff"
-            }
+        """Create a staff user for RBAC testing via token-based invite flow"""
+        # Get practice_id from the admin token
+        me = requests.get(f"{BASE_URL}/api/auth/me",
+            headers={"Authorization": f"Bearer {admin_token}"}
         )
-        if response.status_code == 200:
-            temp_password = response.json()["temporary_password"]
-            # Login as staff
-            login_res = requests.post(f"{BASE_URL}/api/auth/login", json={
-                "email": staff_email,
-                "password": temp_password
-            })
-            return {"token": login_res.json()["access_token"], "email": staff_email}
-        return None
-    
+        practice_id = me.json().get("practice_id")
+        if not practice_id:
+            return None
+
+        staff_email = f"staff_{uuid.uuid4().hex[:6]}@dentaltest.com"
+        invite_res = requests.post(
+            f"{BASE_URL}/api/practices/{practice_id}/staff/invite",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"email": staff_email, "role": "staff"},
+        )
+        if invite_res.status_code != 200:
+            return None
+
+        token = invite_res.json()["token"]
+        new_password = "TestStaff1!"
+        complete_res = requests.post(f"{BASE_URL}/api/invite/{token}/complete", json={
+            "full_name": "Test Staff",
+            "password": new_password,
+            "accepted_terms_version": "1.1",
+            "accepted_privacy_version": "1.0",
+        })
+        if complete_res.status_code != 200:
+            return None
+
+        login_res = requests.post(f"{BASE_URL}/api/auth/login", json={
+            "email": staff_email,
+            "password": new_password,
+        })
+        return {"token": login_res.json()["access_token"], "email": staff_email}
+
     @pytest.fixture
     def auditor_user(self, admin_token):
-        """Create an auditor user for RBAC testing"""
-        auditor_email = f"auditor_{uuid.uuid4().hex[:6]}@dentaltest.com"
-        response = requests.post(f"{BASE_URL}/api/auth/invite",
-            headers={"Authorization": f"Bearer {admin_token}"},
-            json={
-                "email": auditor_email,
-                "full_name": "Test Auditor",
-                "role": "auditor"
-            }
+        """Create an auditor user for RBAC testing via token-based invite flow"""
+        me = requests.get(f"{BASE_URL}/api/auth/me",
+            headers={"Authorization": f"Bearer {admin_token}"}
         )
-        if response.status_code == 200:
-            temp_password = response.json()["temporary_password"]
-            login_res = requests.post(f"{BASE_URL}/api/auth/login", json={
-                "email": auditor_email,
-                "password": temp_password
-            })
-            return {"token": login_res.json()["access_token"], "email": auditor_email}
-        return None
+        practice_id = me.json().get("practice_id")
+        if not practice_id:
+            return None
+
+        auditor_email = f"auditor_{uuid.uuid4().hex[:6]}@dentaltest.com"
+        invite_res = requests.post(
+            f"{BASE_URL}/api/practices/{practice_id}/staff/invite",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"email": auditor_email, "role": "auditor"},
+        )
+        if invite_res.status_code != 200:
+            return None
+
+        token = invite_res.json()["token"]
+        new_password = "TestAuditor1!"
+        complete_res = requests.post(f"{BASE_URL}/api/invite/{token}/complete", json={
+            "full_name": "Test Auditor",
+            "password": new_password,
+            "accepted_terms_version": "1.1",
+            "accepted_privacy_version": "1.0",
+        })
+        if complete_res.status_code != 200:
+            return None
+
+        login_res = requests.post(f"{BASE_URL}/api/auth/login", json={
+            "email": auditor_email,
+            "password": new_password,
+        })
+        return {"token": login_res.json()["access_token"], "email": auditor_email}
     
     def test_admin_can_delete_patient(self, admin_token):
         """Admin should be able to delete patients"""

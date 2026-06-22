@@ -136,6 +136,7 @@ async def list_claims(
     status: str = None,
     current_user: dict = Depends(require_role("admin", "staff", "auditor")),
     _scope=Depends(require_practice_scope()),
+    _gate: None = Depends(require_feature("insurance")),
 ):
     """List claims for the authenticated practice."""
     db = get_db()
@@ -151,6 +152,7 @@ async def get_claim(
     claim_id: str,
     current_user: dict = Depends(require_role("admin", "staff", "auditor")),
     _scope=Depends(require_practice_scope()),
+    _gate: None = Depends(require_feature("insurance")),
 ):
     """Retrieve a single claim by ID."""
     db = get_db()
@@ -168,6 +170,7 @@ async def update_claim(
     body: ClaimUpdate,
     current_user: dict = Depends(require_role("admin", "staff")),
     _scope=Depends(require_practice_scope()),
+    _gate: None = Depends(require_feature("insurance")),
 ):
     """Update mutable fields on a draft or ready_to_submit claim."""
     db = get_db()
@@ -203,6 +206,7 @@ async def submit_claim_by_id(
     claim_id: str,
     current_user: dict = Depends(require_role("admin", "staff")),
     _scope=Depends(require_practice_scope()),
+    _gate: None = Depends(require_feature("insurance")),
 ):
     """
     Submit a claim to the carrier.
@@ -306,6 +310,7 @@ async def get_claim_status(
     claim_id: str,
     current_user: dict = Depends(require_role("admin", "staff", "auditor")),
     _scope=Depends(require_practice_scope()),
+    _gate: None = Depends(require_feature("insurance")),
 ):
     """Check current status of a submitted claim."""
     db = get_db()
@@ -345,6 +350,7 @@ async def reverse_claim(
     reason_code: str = "01",
     current_user: dict = Depends(require_role("admin")),
     _scope=Depends(require_practice_scope()),
+    _gate: None = Depends(require_feature("insurance")),
 ):
     """
     Reverse an accepted or paid claim.
@@ -406,6 +412,7 @@ async def submit_claim_legacy(
     claim: ClaimSubmit,
     current_user: dict = Depends(require_role("admin", "staff")),
     _scope=Depends(require_practice_scope()),
+    _gate: None = Depends(require_feature("insurance")),
 ):
     """
     Legacy single-step create-and-submit endpoint.

@@ -254,16 +254,17 @@ def _smart_title(word: str) -> str:
 
 def normalize_provider_name_and_role(name: str | None, role: str | None) -> tuple[str | None, str | None]:
     """
-    Standardize casing and, for doctor roles, prepend 'Dr.' if missing.
+    Normalize provider name casing and, for doctor roles, prepend 'Dr.' if missing.
+    Role is always stored lowercase.
     Examples:
-      ("john smith",      "dentist")    -> ("Dr. John Smith",     "Dentist")
-      ("kevin mcdonald",  "dentist")    -> ("Dr. Kevin McDonald", "Dentist")
-      ("jane doe",        "hygienist")  -> ("Jane Doe",           "Hygienist")
-      ("Dr. Sarah smith", "dentist")    -> ("Dr. Sarah Smith",    "Dentist")
+      ("john smith",      "dentist")    -> ("Dr. John Smith",  "dentist")
+      ("kevin mcdonald",  "dentist")    -> ("Dr. Kevin McDonald", "dentist")
+      ("jane doe",        "hygienist")  -> ("Jane Doe",        "hygienist")
+      ("Dr. Sarah smith", "dentist")    -> ("Dr. Sarah Smith", "dentist")
     """
     norm_role = None
     if role:
-        norm_role = " ".join(w.capitalize() for w in role.strip().split())
+        norm_role = role.strip().lower()
 
     norm_name = None
     if name:

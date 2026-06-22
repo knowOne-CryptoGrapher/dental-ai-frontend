@@ -55,6 +55,8 @@ from routers.ai_safety_router import router as ai_safety_router
 from routers.invite_router import router as invite_router
 from routers.knowledge_router import router as knowledge_router
 from routers.routing_rules_router import router as routing_rules_router
+from routers.ses_webhook_router import router as ses_webhook_router
+from routers.sales_router import router as sales_router
 
 # -------------------------------------------------------------------
 # LLM Manager Initialization
@@ -308,6 +310,8 @@ app.include_router(ai_safety_router)
 app.include_router(invite_router)
 app.include_router(knowledge_router)
 app.include_router(routing_rules_router)
+app.include_router(ses_webhook_router)
+app.include_router(sales_router)
 
 # -------------------------------------------------------------------
 # Global Error Handler

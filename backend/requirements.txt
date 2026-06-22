@@ -27,6 +27,7 @@ groq==1.2.0
 
 # Payments
 stripe==15.1.0
+sendgrid==6.11.0
 
 # PDF generation
 reportlab>=4.0.0
@@ -39,6 +40,10 @@ python-json-logger==2.0.7
 
 # Rate limiting
 slowapi==0.1.9
+
+# AWS SES
+boto3>=1.35.0
+cryptography>=43.0.0
 
 # Testing
 pytest>=8.0.0

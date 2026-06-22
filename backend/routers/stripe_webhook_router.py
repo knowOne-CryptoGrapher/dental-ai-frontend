@@ -26,7 +26,7 @@ import stripe as stripe_sdk
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["stripe_webhook"])
 
-STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "").strip()
+STRIPE_API_KEY = os.environ.get("STRIPE_SECRET_KEY", "").strip()
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "").strip()
 stripe_sdk.api_key = STRIPE_API_KEY
 
@@ -57,8 +57,10 @@ async def stripe_webhook(request: Request):
     logger.error(f"Stripe webhook parse error: {e}")
     raise HTTPException(status_code=400, detail="Invalid payload")
 
-  event_type = event.get("type", "unknown")
-  obj = (event.get("data") or {}).get("object") or {}
+  event_dict = json.loads(raw_body)
+
+  event_type = event_dict.get("type", "unknown")
+  obj = (event_dict.get("data") or {}).get("object") or {}
   session_id = obj.get("id") if event_type.startswith("checkout.session") else obj.get("checkout_session_id")
   payment_status = obj.get("payment_status") or obj.get("status")
   metadata = obj.get("metadata") or {}
@@ -70,13 +72,13 @@ async def stripe_webhook(request: Request):
   # Persist raw event for audit / replay debugging
   await db.stripe_webhook_events.insert_one(
     {
-      "event_id": event.get("id"),
+      "event_id": event_dict.get("id"),
       "event_type": event_type,
       "session_id": session_id,
       "payment_status": payment_status,
       "metadata": metadata,
       "received_at": datetime.now(timezone.utc).isoformat(),
-      "raw": event,
+      "raw": event_dict,
     }
   )
 
@@ -103,7 +105,7 @@ async def _on_checkout_completed(db, session_id: str, metadata: dict):
 
   # Pull the full Stripe session for the customer / subscription IDs
   try:
-    full = stripe_sdk.checkout.Session.retrieve(session_id)
+    full = stripe_sdk.checkout.Session.retrieve(session_id).to_dict_recursive()
     stripe_customer_id = full.get("customer")
     stripe_subscription_id = full.get("subscription")
   except Exception as e:

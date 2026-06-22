@@ -18,6 +18,7 @@ from fastapi import APIRouter, HTTPException, Depends, Request
 from models import InviteCreate, InviteComplete
 from auth import get_db, require_role, log_audit_event, hash_password, create_access_token
 from config import TERMS_VERSION, PRIVACY_POLICY_VERSION
+from services.email_service import email_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["invites"])
@@ -104,6 +105,26 @@ async def create_invite(
     )
 
     invite_url = f"{_FRONTEND_BASE}/invite/{token}"
+
+    # Send invite email — non-fatal, invite URL is always returned to admin as fallback
+    try:
+        await email_service.send(
+            to_email=body.email,
+            subject=f"You've been invited to join {practice.get('name', 'your practice')} on Front Desk Dental AI",
+            template_name="invite_staff",
+            template_vars={
+                "practice_name": practice.get("name", "your practice"),
+                "role":          body.role,
+                "invite_url":    invite_url,
+                "expiry_hours":  str(_INVITE_EXPIRY_HOURS),
+            },
+            practice_id=practice_id,
+            practice_branding=practice.get("settings", {}).get("branding", {}),
+            reply_to=practice.get("settings", {}).get("branding", {}).get("reply_to_email"),
+        )
+    except Exception as e:
+        logger.error(f"create_invite: email error — {e}")
+
     return {
         "invite_url": invite_url,
         "token": token,

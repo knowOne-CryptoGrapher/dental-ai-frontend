@@ -81,6 +81,8 @@ spec:
           value: price_1TRmOqI19hnYua8lG4wPfahM
         - name: STRIPE_PRICE_ELITE
           value: price_1TRmvcI19hnYua8lfrBiO6Kd
+        - name: ENFORCE_PLAN_GATES
+          value: "true"
         # Secrets from GCP Secret Manager (created by deploy_backend.ps1)
         - name: MONGODB_URI
           valueFrom:
