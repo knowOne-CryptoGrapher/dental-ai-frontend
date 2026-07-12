@@ -44,7 +44,8 @@ $SECRET_VARS = @(
     "SES_REGION",
     "SES_FROM_EMAIL",
     "SES_FROM_NAME",
-    "SES_SNS_TOPIC_ARN"
+    "SES_SNS_TOPIC_ARN",
+    "RETELL_WEBHOOK_SECRET"
 )
 
 function Write-Step([string]$msg) {

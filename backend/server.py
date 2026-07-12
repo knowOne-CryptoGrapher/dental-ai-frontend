@@ -36,7 +36,6 @@ from routers.practice_router import internal_router
 from routers.billing_router import router as billing_router
 from routers.stripe_webhook_router import router as stripe_webhook_router
 from routers.onboarding_router import router as onboarding_router
-from routers.retell_router import router as retell_router
 from routers.llm_router_api import router as llm_router
 
 from routers.analytics_router import router as analytics_router
@@ -49,7 +48,8 @@ from routers.practice_router import router as practice_router
 from routers.practice_config_router import router as practice_config_router
 from routers.superadmin_router import router as superadmin_router
 from routers.retell_api_router import router as retell_api_router
-from routers.retell_webhook_router import router as retell_webhook_router
+from routers.retell_webhook_router_v2 import router as retell_webhook_router_v2
+from routers.retell_context_router import router as retell_context_router
 from routers.pending_actions_router import router as pending_actions_router
 from routers.ai_safety_router import router as ai_safety_router
 from routers.invite_router import router as invite_router
@@ -290,7 +290,6 @@ app.include_router(auth_router)
 app.include_router(billing_router)
 app.include_router(stripe_webhook_router)
 app.include_router(onboarding_router)
-app.include_router(retell_router)
 app.include_router(llm_router)
 
 app.include_router(analytics_router)
@@ -303,7 +302,8 @@ app.include_router(practice_router)
 app.include_router(practice_config_router)
 app.include_router(superadmin_router)
 app.include_router(retell_api_router)
-app.include_router(retell_webhook_router)
+app.include_router(retell_webhook_router_v2)
+app.include_router(retell_context_router)
 app.include_router(internal_router)
 app.include_router(pending_actions_router)
 app.include_router(ai_safety_router)

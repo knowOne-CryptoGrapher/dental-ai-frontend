@@ -325,13 +325,13 @@ async def list_available_providers(
     Expected request body:
     {
         "practice_id": "uuid",
-        "specialty": "General Dentist" // optional
+        "specialty": "dentist|hygienist|specialist" // optional — matches stored role values
     }
-    
+
     Returns:
     {
         "providers": [
-            {"name": "Dr. Sarah Smith", "role": "General Dentist", "id": "uuid"},
+            {"name": "Dr. Sarah Smith", "role": "dentist", "id": "uuid"},
             ...
         ],
         "message": "We have 3 providers available: Dr. Smith, Dr. Johnson, and Dr. Rodriguez."
@@ -355,8 +355,21 @@ async def list_available_providers(
     db = get_db()
     
     query = {"practice_id": practice_id, "$or": [{"active": True}, {"is_active": True}]}
+    # Normalize spoken specialty names to stored role values
+    SPECIALTY_MAP = {
+        "general dentist":  "dentist",
+        "general":          "dentist",
+        "dentist":          "dentist",
+        "hygienist":        "hygienist",
+        "dental hygienist": "hygienist",
+        "orthodontist":     "orthodontist",
+        "specialist":       "specialist",
+        "oral surgeon":     "specialist",
+        "periodontist":     "specialist",
+    }
     if specialty:
-        query["role"] = {"$regex": specialty, "$options": "i"}
+        normalized = SPECIALTY_MAP.get(specialty.lower().strip(), specialty)
+        query["role"] = {"$regex": normalized, "$options": "i"}
     
     providers = await db.providers.find(query, {"_id": 0}).to_list(100)
     
@@ -737,6 +750,9 @@ async def book_appointment_realtime(
     practice_id = data.get("practice_id")
     patient_phone = data.get("patient_phone")
     patient_name = data.get("patient_name")
+    if not patient_phone:
+        patient_phone = data.get("phone_number") or data.get("caller_phone") or "unknown"
+        logger.warning("book_appointment_no_phone", extra={"patient_name": patient_name})
     patient_email = data.get("patient_email")
     appointment_date = data.get("date")
     appointment_time = data.get("time")
@@ -744,10 +760,10 @@ async def book_appointment_realtime(
     reason = data.get("reason", "Consultation")
     is_emergency = data.get("is_emergency", False)
     
-    if not all([practice_id, patient_phone, patient_name, appointment_date, appointment_time]):
+    if not all([practice_id, patient_name, appointment_date, appointment_time]):
         raise HTTPException(
             status_code=400,
-            detail="practice_id, patient_phone, patient_name, date, and time are required"
+            detail="practice_id, patient_name, date, and time are required"
         )
 
     # Reject past-date bookings — same year-default protection as availability check

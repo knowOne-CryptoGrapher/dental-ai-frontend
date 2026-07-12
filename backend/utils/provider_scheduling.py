@@ -9,10 +9,26 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def get_day_name(date_str: str) -> str:
-    """Convert date string to day name (monday, tuesday, etc.)"""
-    date_obj = datetime.fromisoformat(date_str)
-    return date_obj.strftime('%A').lower()
+DAY_ABBREVIATIONS = {
+    # Full names
+    "monday": "mon", "tuesday": "tue", "wednesday": "wed",
+    "thursday": "thu", "friday": "fri", "saturday": "sat", "sunday": "sun",
+    # 3-letter abbreviations (already correct)
+    "mon": "mon", "tue": "tue", "wed": "wed",
+    "thu": "thu", "fri": "fri", "sat": "sat", "sun": "sun",
+    # 2-letter variants
+    "mo": "mon", "tu": "tue", "we": "wed",
+    "th": "thu", "fr": "fri", "sa": "sat", "su": "sun",
+}
+
+def get_day_name(date: datetime) -> str:
+    """
+    Return the 3-letter lowercase day abbreviation for a date.
+    Normalizes any common day name format to match DB working_hours keys
+    (mon, tue, wed, thu, fri, sat, sun).
+    """
+    full_name = date.strftime('%A').lower()  # e.g. "friday"
+    return DAY_ABBREVIATIONS.get(full_name, full_name[:3].lower())
 
 
 def time_to_minutes(time_str: str) -> int:
@@ -62,7 +78,7 @@ def validate_provider_availability(
         return {"available": False, "reason": f"Provider does not handle '{appointment_type}' appointments"}
     
     # Check if provider works on this day
-    day_name = get_day_name(date)
+    day_name = get_day_name(datetime.fromisoformat(date))
     working_hours = provider.get('working_hours', {})
     day_schedule = working_hours.get(day_name, [])
     
@@ -127,7 +143,7 @@ async def get_provider_availability_slots(
         return []
     
     # Get working hours for the day
-    day_name = get_day_name(date)
+    day_name = get_day_name(datetime.fromisoformat(date))
     working_hours = provider.get('working_hours', {})
     day_schedule = working_hours.get(day_name, [])
     
