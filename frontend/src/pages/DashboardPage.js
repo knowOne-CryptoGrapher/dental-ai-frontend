@@ -242,7 +242,7 @@ export default function DashboardPage({ useMock = false }) {
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-gray-900">
-                        {call.patient_name || call.from_number || 'Unknown Caller'}
+                        {call.patient_name || call.patient_phone || call.from_number || 'Unknown Caller'}
                       </p>
                       <p className="text-xs text-gray-500 flex items-center gap-1">
                         <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
@@ -344,7 +344,7 @@ export default function DashboardPage({ useMock = false }) {
                   <div className="flex items-center gap-2">
                     <PhoneIncoming className="w-4 h-4 text-teal-500" />
                     <span className="text-sm font-medium text-gray-900">
-                      {call.patient_name || 'Unknown Caller'}
+                      {call.patient_name || call.patient_phone || 'Unknown Caller'}
                     </span>
                   </div>
                   <span className="text-xs text-gray-400">

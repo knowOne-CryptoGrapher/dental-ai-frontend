@@ -120,7 +120,7 @@ export default function AppointmentsPage({ useMock = false }) {
     .filter(a => filter === 'all' || a.status === filter)
     .filter(a =>
       a.patient_name?.toLowerCase().includes(search.toLowerCase()) ||
-      a.service_type?.toLowerCase().includes(search.toLowerCase())
+      (a.reason || a.service_type)?.toLowerCase().includes(search.toLowerCase())
     )
     .sort((a, b) => {
       if (a.status === 'pending_verification' && b.status !== 'pending_verification') return -1;
@@ -227,7 +227,7 @@ export default function AppointmentsPage({ useMock = false }) {
                           </span>
 
                           <span className="text-gray-400">·</span>
-                          <span>{apt.service_type}</span>
+                          <span>{apt.reason || apt.service_type}</span>
 
                           {apt.provider_name && (
                             <>
@@ -320,7 +320,7 @@ export default function AppointmentsPage({ useMock = false }) {
 
                 <div className="flex justify-between">
                   <span className="text-gray-500">Service</span>
-                  <span className="font-medium">{verifyDialog.service_type}</span>
+                  <span className="font-medium">{verifyDialog.reason || verifyDialog.service_type}</span>
                 </div>
               </div>
 

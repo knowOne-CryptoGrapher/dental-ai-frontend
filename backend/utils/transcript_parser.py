@@ -110,6 +110,9 @@ def categorize_reason(reason_text: str) -> str:
         if any(kw in reason_lower for kw in keywords):
             return category
     
+    booking_keywords = ["appointment", "book", "schedule", "reschedule", "make an appointment"]
+    if any(k in reason_lower for k in booking_keywords):
+        return "Appointment Booking"
     return reason_text if len(reason_text) < 100 else "General Inquiry"
 
 
