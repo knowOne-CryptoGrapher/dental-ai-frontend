@@ -42,7 +42,7 @@ class CallSummaryRequest(BaseModel):
     outcome: str   # "appointment_booked"|"info_provided"|"transferred"|"voicemail"|"abandoned"
     follow_up_needed: bool = False
     tags: list[str] = []
-    transcript: str = ""
+    transcript: Optional[str] = None
     appointment_id: Optional[str] = None
     patient_id: Optional[str] = None
 
@@ -196,6 +196,7 @@ async def ingest_call_summary(
     Upserts the CallLog by call_id. If follow_up_needed=True, inserts a
     pending_actions record for the practice team to action.
     """
+    transcript_value = body.transcript or ""
     now_iso = datetime.now(timezone.utc).isoformat()
     db = get_db()
 
@@ -225,8 +226,8 @@ async def ingest_call_summary(
         },
     }
 
-    if body.transcript and body.transcript.strip():
-        update_doc["$set"]["transcript"] = body.transcript
+    if transcript_value.strip():
+        update_doc["$set"]["transcript"] = transcript_value
 
     await db.call_logs.update_one(
         {"call_id": body.call_id},

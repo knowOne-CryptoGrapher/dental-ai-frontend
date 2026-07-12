@@ -34,21 +34,21 @@ export default function CallLogsPage({ useMock = false }) {
 
       const transformedCalls = (res.data || []).map(call => ({
         id: call.call_id || `call-${Date.now()}`,
-        patient_name: call.patient_name || 'Unknown Caller',
-        patient_phone: call.from_number || 'N/A',
-        duration: call.duration_seconds || 0,
+        patient_name: call.patient_name || call.caller_name || call.patient_phone || 'Unknown Caller',
+        patient_phone: call.patient_phone || call.from_number || 'N/A',
+        duration: call.duration || call.duration_seconds || 0,
         timestamp: call.created_at || new Date().toISOString(),
-        status: call.call_status || 'completed',
+        status: call.status || call.call_status || 'completed',
         handled_by: call.agent_id || 'AI',
         transcript: call.transcript || 'No transcript available',
-        action_taken: call.reason_for_call,
+        action_taken: call.action_taken || call.call_summary?.call_summary || call.reason_for_call || call.call_type || 'General inquiry',
         call_summary: {
-          reason: call.reason_for_call || 'General inquiry',
-          notes: call.emergency_detected
+          reason: call.action_taken || call.call_summary?.call_summary || call.reason_for_call || call.call_type || 'General inquiry',
+          notes: (call.emergency_detected || call.is_emergency)
             ? `⚠️ EMERGENCY: ${(call.emergency_keywords || []).join(', ')}`
             : null
         },
-        emergency_detected: call.emergency_detected || false,
+        emergency_detected: call.emergency_detected || call.is_emergency || call.call_summary?.emergency_detected || false,
         emergency_keywords: call.emergency_keywords || []
       }));
 
@@ -87,9 +87,17 @@ export default function CallLogsPage({ useMock = false }) {
 
   const getStatusColor = (status) => {
     const s = (status || '').toLowerCase();
-    if (s === 'active' || s === 'started') return 'bg-green-50 text-green-700 border-green-200';
+    if (s === 'active' || s === 'started') return 'bg-blue-50 text-blue-700 border-blue-200';
     if (s === 'completed') return 'bg-gray-100 text-gray-600 border-gray-200';
     return 'bg-red-50 text-red-600 border-red-200';
+  };
+
+  const getStatusLabel = (status) => {
+    const s = (status || '').toLowerCase();
+    if (s === 'active' || s === 'started') return 'In Progress';
+    if (s === 'completed') return 'Completed';
+    if (s === 'error' || s === 'failed') return 'Error';
+    return status || 'Unknown';
   };
 
   const filtered = calls.filter(c => {
@@ -168,7 +176,7 @@ export default function CallLogsPage({ useMock = false }) {
                           variant="outline"
                           className={`text-[10px] ${getStatusColor(call.status)}`}
                         >
-                          {call.status}
+                          {getStatusLabel(call.status)}
                         </Badge>
                       </div>
 

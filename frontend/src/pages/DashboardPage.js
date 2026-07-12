@@ -48,8 +48,8 @@ export default function DashboardPage({ useMock = false }) {
         setRecentAppointments(aptsRes.data.slice(0, 4));
 
         const allCalls = callsRes.data || [];
-        const active = allCalls.filter(c => c.call_status === 'started' && !c.end_timestamp);
-        const completed = allCalls.filter(c => c.call_status !== 'started' || c.end_timestamp);
+        const active = allCalls.filter(c => (c.status || c.call_status) === 'started' && !c.end_timestamp);
+        const completed = allCalls.filter(c => (c.status || c.call_status) !== 'started' || c.end_timestamp);
 
         setActiveCalls(active);
         setRecentCalls(completed.slice(0, 3));
@@ -348,7 +348,7 @@ export default function DashboardPage({ useMock = false }) {
                     </span>
                   </div>
                   <span className="text-xs text-gray-400">
-                    {call.duration_seconds ? formatDuration(call.duration_seconds) : '--:--'}
+                    {(call.duration || call.duration_seconds) ? formatDuration(call.duration || call.duration_seconds) : '--:--'}
                   </span>
                 </div>
                 <p className="text-xs text-gray-500 line-clamp-1">
