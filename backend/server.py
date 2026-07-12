@@ -5,6 +5,7 @@ import json
 import logging
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -121,6 +122,17 @@ async def _on_rate_limit_exceeded(request: Request, exc: RateLimitExceeded):
 
 
 app.add_exception_handler(RateLimitExceeded, _on_rate_limit_exceeded)
+
+
+@app.exception_handler(RequestValidationError)
+async def _on_validation_error(request: Request, exc: RequestValidationError):
+    errors = [{"loc": e["loc"], "msg": e["msg"], "type": e["type"]} for e in exc.errors()]
+    logger.warning(
+        "request_validation_error",
+        extra={"path": request.url.path, "method": request.method, "errors": errors},
+    )
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+
 
 # -------------------------------------------------------------------
 # Request Logging Middleware

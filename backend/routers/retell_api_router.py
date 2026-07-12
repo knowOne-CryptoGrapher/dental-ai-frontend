@@ -240,8 +240,27 @@ async def check_provider_availability(
     logger.info(f"✅ Matched provider: {provider_name} (ID: {provider_id})")
     
     # Check availability for the requested date
-    from utils.provider_scheduling import get_provider_availability_slots, validate_provider_availability
-    
+    from utils.provider_scheduling import get_provider_availability_slots, validate_provider_availability, get_day_name
+    from datetime import datetime as _dt
+
+    # Detect non-working day before computing slots — gives a more accurate
+    # message than "fully booked" when the provider simply doesn't work that day.
+    _req_dt = _dt.fromisoformat(requested_date)
+    day_key = get_day_name(_req_dt)
+    day_schedule = matched_provider.get('working_hours', {}).get(day_key, [])
+    if not day_schedule:
+        day_label = _req_dt.strftime('%A')
+        return {
+            "available": False,
+            "provider_name": provider_name,
+            "provider_id": provider_id,
+            "date": requested_date,
+            "time": requested_time,
+            "suggested_slots": [],
+            "suggested_times": [],
+            "message": f"{provider_name} does not work on {day_label}s. Would you like to try a different day?"
+        }
+
     # Get available slots for the day
     slots = await get_provider_availability_slots(
         db, provider_id, requested_date, None, None

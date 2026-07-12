@@ -40,7 +40,7 @@ class CallSummaryRequest(BaseModel):
     call_id: str
     reason: str
     outcome: str   # "appointment_booked"|"info_provided"|"transferred"|"voicemail"|"abandoned"
-    follow_up_needed: bool
+    follow_up_needed: bool = False
     tags: list[str] = []
     transcript: str = ""
     appointment_id: Optional[str] = None
