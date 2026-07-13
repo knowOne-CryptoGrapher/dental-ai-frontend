@@ -41,7 +41,7 @@ async def get_appointments(
         query["location_id"] = location_id
     if current_user.get("role") == "provider" and current_user.get("provider_id"):
         query["provider_id"] = current_user["provider_id"]
-    return await db.appointments.find(query, {"_id": 0}).sort("appointment_date", 1).to_list(2000)
+    return await db.appointments.find(query, {"_id": 0}).sort("created_at", -1).to_list(2000)
 
 
 @router.post("/appointments")

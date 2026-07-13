@@ -100,15 +100,17 @@ export default function CallLogsPage({ useMock = false }) {
     return status || 'Unknown';
   };
 
-  const filtered = calls.filter(c => {
-    if (!search.trim()) return true;
-    const s = search.toLowerCase();
-    return (
-      (c.patient_name || '').toLowerCase().includes(s) ||
-      (c.patient_phone || '').includes(search) ||
-      (c.call_summary?.reason || '').toLowerCase().includes(s)
-    );
-  });
+  const filtered = calls
+    .filter(c => {
+      if (!search.trim()) return true;
+      const s = search.toLowerCase();
+      return (
+        (c.patient_name || '').toLowerCase().includes(s) ||
+        (c.patient_phone || '').includes(search) ||
+        (c.call_summary?.reason || '').toLowerCase().includes(s)
+      );
+    })
+    .sort((a, b) => new Date(b.timestamp || b.created_at) - new Date(a.timestamp || a.created_at));
 
   return (
     <div className="space-y-6 max-w-7xl">

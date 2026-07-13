@@ -125,7 +125,7 @@ export default function AppointmentsPage({ useMock = false }) {
     .sort((a, b) => {
       if (a.status === 'pending_verification' && b.status !== 'pending_verification') return -1;
       if (b.status === 'pending_verification' && a.status !== 'pending_verification') return 1;
-      return new Date(a.appointment_date) - new Date(b.appointment_date);
+      return new Date(b.created_at) - new Date(a.created_at);
     });
 
   const pendingCount = appointments.filter(a => a.status === 'pending_verification').length;
