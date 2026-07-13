@@ -11,6 +11,7 @@ import hashlib
 
 from auth import get_db
 from utils.phi_redaction import mask_phone
+from utils.phone import normalize_phone
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/retell", tags=["retell_public_api"])
@@ -483,21 +484,29 @@ async def lookup_patient_by_phone(
     
     db = get_db()
     
-    # Normalize phone number (remove spaces, dashes, etc.)
-    phone_normalized = phone_number.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
-    
-    # Find patient by phone number
-    patient = await db.patients.find_one(
-        {
-            "practice_id": practice_id,
-            "$or": [
-                {"phone": phone_number},
-                {"phone": phone_normalized},
-                {"phone": {"$regex": phone_normalized[-10:] if len(phone_normalized) >= 10 else phone_normalized}}
-            ]
-        },
-        {"_id": 0}
-    )
+    # Primary lookup via normalized E.164 field (fast, exact, index-backed)
+    normalized = normalize_phone(phone_number)
+    patient = None
+    if normalized:
+        patient = await db.patients.find_one(
+            {"practice_id": practice_id, "normalized_phone": normalized},
+            {"_id": 0}
+        )
+
+    # Fallback: fuzzy match on raw phone field (catches pre-migration records)
+    if not patient:
+        phone_normalized = phone_number.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+        patient = await db.patients.find_one(
+            {
+                "practice_id": practice_id,
+                "$or": [
+                    {"phone": phone_number},
+                    {"phone": phone_normalized},
+                    {"phone": {"$regex": phone_normalized[-10:] if len(phone_normalized) >= 10 else phone_normalized}}
+                ]
+            },
+            {"_id": 0}
+        )
     
     if not patient:
         logger.info("retell_patient_not_found", extra={"phone": mask_phone(phone_number)})
@@ -656,15 +665,22 @@ async def register_patient_realtime(
             detail="practice_id, patient_phone, and patient_name are required"
         )
 
+    normalized = normalize_phone(patient_phone)
+    if not normalized:
+        raise HTTPException(
+            status_code=400,
+            detail="Valid phone number required to register a patient. Please collect the caller's phone number."
+        )
+
     logger.info("retell_register_patient", extra={"phone": mask_phone(patient_phone)})
 
     db = get_db()
     from uuid import uuid4
     from datetime import datetime, timezone
 
-    # Check if already registered
+    # Check if already registered (normalized_phone for format-agnostic dedup)
     existing = await db.patients.find_one(
-        {"practice_id": practice_id, "phone": patient_phone},
+        {"practice_id": practice_id, "normalized_phone": normalized},
         {"_id": 0}
     )
     if existing:
@@ -692,6 +708,7 @@ async def register_patient_realtime(
         "practice_id": practice_id,
         "name": patient_name,
         "phone": patient_phone,
+        "normalized_phone": normalized,
         "email": patient_email or "",
         "date_of_birth": date_of_birth,
         "preferred_contact": "phone",
@@ -813,11 +830,18 @@ async def book_appointment_realtime(
     from datetime import datetime, timezone
     
     # Find or create patient
-    patient = await db.patients.find_one(
-        {"practice_id": practice_id, "phone": patient_phone},
-        {"_id": 0}
-    )
-    
+    normalized_phone = normalize_phone(patient_phone)
+    if not normalized_phone:
+        logger.warning("book_appointment_no_phone_normalized", extra={"patient_name": patient_name})
+
+    patient_query = {"practice_id": practice_id}
+    if normalized_phone:
+        patient_query["normalized_phone"] = normalized_phone
+    else:
+        patient_query["name"] = patient_name
+
+    patient = await db.patients.find_one(patient_query, {"_id": 0})
+
     if not patient:
         # Create new patient
         patient_id = str(uuid4())
@@ -827,6 +851,7 @@ async def book_appointment_realtime(
             "name": patient_name,
             "email": patient_email or "",
             "phone": patient_phone,
+            "normalized_phone": normalized_phone,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         await db.patients.insert_one(patient_doc)
