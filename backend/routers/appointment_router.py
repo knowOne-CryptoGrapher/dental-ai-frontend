@@ -50,7 +50,7 @@ async def create_appointment(apt: AppointmentCreate, current_user: dict = Depend
     
     db = get_db()
     practice_id = current_user.get("practice_id")
-    is_emergency = await detect_emergency(apt.notes or "")
+    is_emergency = detect_emergency(apt.notes or "")
 
     # Validate and enrich provider data if provider_id is provided
     provider_name = None

@@ -49,6 +49,10 @@ DEFAULT_PRICES: dict[tuple[str, str], ModelPrice] = {
     ("google", "gemini-1.5-flash-8b"): ModelPrice(0.0375, 0.15),
     ("google", "gemini-1.5-pro"):    ModelPrice(1.25, 5.00),
     ("google", "gemini-2.0-flash"):  ModelPrice(0.10, 0.40),
+    # Groq
+    ("groq", "llama-3.3-70b-versatile"): ModelPrice(0.59, 0.79),
+    # Anthropic (current generation)
+    ("anthropic", "claude-haiku-4-5-20251001"): ModelPrice(0.80, 4.00),
     # Local / stub → free
     ("local", "*"):                  ModelPrice(0.0, 0.0),
     ("stub", "*"):                   ModelPrice(0.0, 0.0),

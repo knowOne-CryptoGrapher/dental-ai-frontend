@@ -54,15 +54,13 @@ spec:
         - name: CORS_ORIGINS
           value: "https://frontdeskdentalai.com,https://www.frontdeskdentalai.com,https://dental-ai-frontend.pages.dev"
         - name: LLM_DEFAULT_PROVIDER
-          value: openai
+          value: groq
         - name: LLM_DEFAULT_MODEL
-          value: gpt-4o-mini
+          value: llama-3.3-70b-versatile
         - name: LLM_ESCALATION_PROVIDER
           value: anthropic
         - name: LLM_ESCALATION_MODEL
-          value: claude-3-7-sonnet
-        - name: LLM_RULES_PATH
-          value: llm/llm_rules.json
+          value: claude-haiku-4-5-20251001
         - name: LLM_PRICING_PATH
           value: llm/llm_pricing.json
         - name: OPENAI_TEXT_MODEL
@@ -70,9 +68,9 @@ spec:
         - name: OPENAI_JSON_MODEL
           value: gpt-4o-mini
         - name: GROQ_TEXT_MODEL
-          value: llama3-70b-8192
+          value: llama-3.3-70b-versatile
         - name: GROQ_JSON_MODEL
-          value: llama3-70b-8192
+          value: llama-3.3-70b-versatile
         - name: STRIPE_PRICE_BASIC
           value: price_1TRmO0I19hnYua8lR4AFGh7G
         - name: STRIPE_PRICE_PROFESSIONAL

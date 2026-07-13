@@ -214,16 +214,13 @@ async def log_analytics_event(practice_id: str, event_type: str, event_data: dic
 
 # ==== EMERGENCY DETECTION ====
 
-EMERGENCY_KEYWORDS = [
-    "emergency", "urgent", "pain", "severe", "bleeding", "swelling", "broken",
-    "knocked out", "tooth fell out", "accident", "injury", "trauma", "fever",
-    "infection", "abscess", "can't eat", "can't sleep", "unbearable"
-]
+from utils.retell_security import detect_emergency_keywords
 
-async def detect_emergency(text: str) -> bool:
+def detect_emergency(text: str) -> bool:
+    """Delegates to canonical emergency detector in retell_security."""
     if not text:
         return False
-    return any(kw in text.lower() for kw in EMERGENCY_KEYWORDS)
+    return len(detect_emergency_keywords(text)) > 0
 
 # ==== FILE NUMBER GENERATOR ====
 

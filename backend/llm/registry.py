@@ -15,6 +15,7 @@ from .base import LLMProvider, ProviderConfig
 from .openai_provider import OpenAIProvider
 from .anthropic_provider import AnthropicProvider
 from .google_provider import GoogleProvider
+from .groq_provider import GroqProvider
 from .stub_provider import StubProvider
 
 logger = logging.getLogger(__name__)
@@ -69,6 +70,14 @@ def _build_default_registry() -> ProviderRegistry:
             name="google", api_key=google_key,
         )))
         logger.info("LLM: Google provider registered")
+
+    # Groq
+    groq_key = os.environ.get("GROQ_API_KEY", "").strip()
+    if groq_key:
+        reg.register("groq", GroqProvider(ProviderConfig(
+            name="groq", api_key=groq_key,
+        )))
+        logger.info("LLM: Groq provider registered")
 
     # Local OpenAI-compat (e.g., Ollama, vLLM, LM Studio).
     # Configured separately so it doesn't shadow the real OpenAI provider.

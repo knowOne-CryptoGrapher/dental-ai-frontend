@@ -24,10 +24,12 @@ logger = logging.getLogger(__name__)
 
 
 # ── Default model identifiers (env-overridable) ───────────────────────
-DEFAULT_PROVIDER = os.environ.get("LLM_DEFAULT_PROVIDER", "stub")
-DEFAULT_MODEL = os.environ.get("LLM_DEFAULT_MODEL", "gpt-4o-mini")
-ESCALATION_PROVIDER = os.environ.get("LLM_ESCALATION_PROVIDER", "stub")
-ESCALATION_MODEL = os.environ.get("LLM_ESCALATION_MODEL", "claude-3-5-sonnet-20241022")
+DEFAULT_PROVIDER = os.environ.get("LLM_DEFAULT_PROVIDER", "groq")
+DEFAULT_MODEL = os.environ.get("LLM_DEFAULT_MODEL", "llama-3.3-70b-versatile")
+ESCALATION_PROVIDER = os.environ.get("LLM_ESCALATION_PROVIDER", "anthropic")
+ESCALATION_MODEL = os.environ.get("LLM_ESCALATION_MODEL", "claude-haiku-4-5-20251001")
+# NOTE: Three-tier routing (groq → openai → anthropic) requires a router refactor
+# to support two escalation levels; not implemented. Use env overrides per tier.
 
 
 # ── Rules ─────────────────────────────────────────────────────────────
@@ -65,11 +67,12 @@ class RoutingRule:
 DEFAULT_RULES: list[RoutingRule] = [
     RoutingRule(
         name="insurance_question",
-        description="Insurance, coverage, claims, deductibles — high accuracy needed.",
+        description="Insurance, coverage, claims, CDANet, fee guides — high accuracy needed.",
         keywords=[
             "insurance", "coverage", "covered", "deductible", "co-pay", "copay",
             "claim", "policy", "in-network", "out of network", "out-of-network",
             "predetermination", "ppo", "hmo", "delta dental", "blue cross",
+            "preauthorization", "cdanet", "fee guide",
         ],
     ),
     RoutingRule(
@@ -82,8 +85,15 @@ DEFAULT_RULES: list[RoutingRule] = [
         ],
     ),
     RoutingRule(
+        name="clinical",
+        description="Clinical or medical content — escalate for accuracy.",
+        keywords=[
+            "diagnosis", "symptom", "infection", "prescription", "treatment",
+        ],
+    ),
+    RoutingRule(
         name="complex_scheduling",
-        description="Multi-turn conversation w/ scheduling intent — escalate to handle nuance.",
+        description="Multi-turn scheduling conversation — escalate to handle nuance.",
         min_turns=4,
         keywords=[
             "earliest", "different time", "another day", "options", "before", "after",
@@ -92,8 +102,14 @@ DEFAULT_RULES: list[RoutingRule] = [
         ],
     ),
     RoutingRule(
+        name="legal_longform",
+        description="Legal or contractual content.",
+        keywords=["contract", "agreement", "acquisition", "legal", "terms", "binding"],
+    ),
+    RoutingRule(
         name="uncertainty",
-        description="Previous assistant turn expressed uncertainty — escalate this turn.",
+        description="Assistant or user expressed uncertainty — escalate this turn.",
+        keywords=["uncertain", "ambiguous", "confused"],
         regex=r"\b(i'?m not sure|let me check|i don'?t know|let me transfer|hold on|not certain)\b",
     ),
 ]

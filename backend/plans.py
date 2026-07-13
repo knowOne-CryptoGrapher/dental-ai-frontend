@@ -108,7 +108,7 @@ _PRO_LLM = PlanLLM(
     default_provider=os.environ.get("LLM_DEFAULT_PROVIDER", "openai"),
     default_model=os.environ.get("LLM_DEFAULT_MODEL", "gpt-4o-mini"),
     escalation_provider=os.environ.get("LLM_ESCALATION_PROVIDER", "anthropic"),
-    escalation_model=os.environ.get("LLM_ESCALATION_MODEL", "claude-3-7-sonnet"),
+    escalation_model=os.environ.get("LLM_ESCALATION_MODEL", "claude-haiku-4-5-20251001"),
     allow_escalation=True,
     rate_limit_per_min=120,
 )
@@ -117,7 +117,7 @@ _ENT_LLM = PlanLLM(
     default_provider=os.environ.get("LLM_DEFAULT_PROVIDER", "openai"),
     default_model=os.environ.get("LLM_DEFAULT_MODEL", "gpt-4o-mini"),
     escalation_provider=os.environ.get("LLM_ESCALATION_PROVIDER", "anthropic"),
-    escalation_model=os.environ.get("LLM_ESCALATION_MODEL", "claude-3-7-sonnet"),
+    escalation_model=os.environ.get("LLM_ESCALATION_MODEL", "claude-haiku-4-5-20251001"),
     allow_escalation=True,
     rate_limit_per_min=600,
 )
@@ -126,7 +126,7 @@ _ELITE_LLM = PlanLLM(
     default_provider=os.environ.get("LLM_DEFAULT_PROVIDER", "openai"),
     default_model=os.environ.get("LLM_DEFAULT_MODEL", "gpt-4o-mini"),
     escalation_provider=os.environ.get("LLM_ESCALATION_PROVIDER", "anthropic"),
-    escalation_model=os.environ.get("LLM_ESCALATION_MODEL", "claude-3-7-sonnet"),
+    escalation_model=os.environ.get("LLM_ESCALATION_MODEL", "claude-haiku-4-5-20251001"),
     allow_escalation=True,
     rate_limit_per_min=2000,  # Elite gets the highest throughput
 )
