@@ -64,10 +64,15 @@ async def get_my_features(current_user: dict = Depends(require_role("admin", "st
     {"_id": 0, "subscription_plan": 1, "billing_status": 1},
   ) or {}
   plan = get_plan(practice.get("subscription_plan"))
+  billing_status = practice.get("billing_status", "active")
   return {
     "plan_id": plan.id,
     "plan_name": plan.name,
-    "billing_status": practice.get("billing_status", "active"),
+    "billing_status": billing_status,
+    "billing_warning": (
+      "Your payment is past due. Update your payment method to avoid service interruption."
+      if billing_status == "past_due" else None
+    ),
     "features": plan.public_dict()["features"],
     "limits": {
       "calls_per_month": plan.limits.calls_per_month,

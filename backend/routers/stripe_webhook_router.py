@@ -16,6 +16,7 @@ from __future__ import annotations
 import os
 import json
 import logging
+import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Request, HTTPException
@@ -29,6 +30,17 @@ router = APIRouter(tags=["stripe_webhook"])
 STRIPE_API_KEY = os.environ.get("STRIPE_SECRET_KEY", "").strip()
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "").strip()
 stripe_sdk.api_key = STRIPE_API_KEY
+
+PRICE_TO_PLAN: dict[str, str] = {
+    k: v
+    for k, v in {
+        os.environ.get("STRIPE_PRICE_BASIC", ""):        "basic",
+        os.environ.get("STRIPE_PRICE_PROFESSIONAL", ""): "professional",
+        os.environ.get("STRIPE_PRICE_ENTERPRISE", ""):   "enterprise",
+        os.environ.get("STRIPE_PRICE_ELITE", ""):        "elite",
+    }.items()
+    if k
+}
 
 
 @router.post("/api/webhook/stripe")
@@ -134,6 +146,24 @@ async def _on_checkout_completed(db, session_id: str, metadata: dict):
 
   await db.practices.update_one({"id": practice_id}, {"$set": update})
 
+  if stripe_customer_id:
+    await db.billing_customers.update_one(
+      {"practice_id": practice_id},
+      {
+        "$set": {
+          "stripe_customer_id": stripe_customer_id,
+          "plan": plan_id or "basic",
+          "status": "active",
+          "updated_at": datetime.now(timezone.utc).isoformat(),
+        },
+        "$setOnInsert": {
+          "id": str(uuid.uuid4()),
+          "created_at": datetime.now(timezone.utc).isoformat(),
+        },
+      },
+      upsert=True,
+    )
+
   # Idempotent transaction promotion
   txn = await db.payment_transactions.find_one(
     {"session_id": session_id},
@@ -158,14 +188,16 @@ async def _on_checkout_completed(db, session_id: str, metadata: dict):
 
 
 async def _sync_subscription_state(db, event_type: str, obj: dict):
-  """Flip practice.billing_status when Stripe tells us the subscription state changed.
+  """Flip practice.billing_status (and subscription_plan on plan change) when
+  Stripe tells us the subscription state changed.
   Stripe sends the subscription object inside event.data.object."""
   customer_id = obj.get("customer")
   if not customer_id:
     return
 
-  # Map Stripe state → our billing_status
   new_status: str | None = None
+  new_plan:   str | None = None
+
   if event_type == "customer.subscription.deleted":
     new_status = "cancelled"
   elif event_type == "customer.subscription.updated":
@@ -176,22 +208,31 @@ async def _sync_subscription_state(db, event_type: str, obj: dict):
       new_status = "active"
     elif stripe_status in ("canceled", "unpaid"):
       new_status = "cancelled"
+    try:
+      price_id = obj["items"]["data"][0]["price"]["id"]
+      new_plan = PRICE_TO_PLAN.get(price_id)
+    except (KeyError, IndexError, TypeError):
+      pass
   elif event_type == "invoice.payment_failed":
     new_status = "past_due"
   elif event_type == "invoice.paid":
     new_status = "active"
 
   if new_status:
+    update_fields: dict = {
+      "billing_status": new_status,
+      "billing_status_updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if new_plan:
+      update_fields["subscription_plan"] = new_plan
+    if event_type == "invoice.paid":
+      update_fields["last_payment_at"] = datetime.now(timezone.utc).isoformat()
+
     result = await db.practices.update_one(
       {"stripe_customer_id": customer_id},
-      {
-        "$set": {
-          "billing_status": new_status,
-          "billing_status_updated_at": datetime.now(timezone.utc).isoformat(),
-        }
-      },
+      {"$set": update_fields},
     )
     if result.matched_count:
       logger.info(
-        f"🔄 Stripe → practice billing_status={new_status} (customer={customer_id})"
+        f"🔄 Stripe → practice billing_status={new_status} plan={new_plan} (customer={customer_id})"
       )
