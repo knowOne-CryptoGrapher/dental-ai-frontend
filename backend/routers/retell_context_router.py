@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
@@ -139,6 +139,78 @@ async def get_practice_context(
         "branding": {
             "greeting_name": branding.get("greeting_name") or practice_name,
             "voice_style": branding.get("voice_style") or "professional",
+        },
+    }
+
+
+@router.post("/retell/practice-context")
+async def get_practice_context_for_agent(
+    request: Request,
+    x_retell_api_key: str | None = Header(None),
+):
+    """
+    POST endpoint for Retell agent function calls.
+    Accepts practice_id in the body + x-retell-api-key header for auth.
+    Returns full practice context including current date in local timezone.
+    """
+    if not RETELL_API_KEY or x_retell_api_key != RETELL_API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    practice_id = body.get("practice_id") or (body.get("args") or {}).get("practice_id")
+    if not practice_id:
+        raise HTTPException(status_code=400, detail="practice_id required")
+
+    db = get_db()
+    practice = await db.practices.find_one({"id": practice_id}, {"_id": 0})
+    if not practice:
+        raise HTTPException(status_code=404, detail="Practice not found")
+
+    settings  = practice.get("settings") or {}
+    branding  = settings.get("branding") or {}
+    practice_name = practice.get("name", "")
+
+    tz_name = practice.get("timezone", "America/Toronto")
+    try:
+        tz = pytz.timezone(tz_name)
+        now_local = datetime.now(timezone.utc).astimezone(tz)
+    except Exception:
+        now_local = datetime.now(timezone.utc)
+        tz_name = "UTC"
+
+    providers = await db.providers.find(
+        {"practice_id": practice_id, "$or": [{"is_active": True}, {"active": True}]},
+        {"_id": 0, "name": 1, "role": 1, "specialties": 1, "title": 1},
+    ).to_list(100)
+
+    return {
+        "practice_id":          practice_id,
+        "practice_name":        practice_name,
+        "timezone":             tz_name,
+        "current_date":         now_local.strftime("%Y-%m-%d"),
+        "current_day_name":     now_local.strftime("%A"),
+        "current_time_local":   now_local.strftime("%H:%M"),
+        "current_datetime_iso": now_local.isoformat(),
+        "subscription_plan":    practice.get("subscription_plan", ""),
+        "hours":                settings.get("hours", {}),
+        "providers": [
+            {
+                "name":        p.get("name", ""),
+                "role":        p.get("role", ""),
+                "specialties": p.get("specialties") or [],
+                "title":       p.get("title", ""),
+            }
+            for p in providers
+        ],
+        "appointment_types": settings.get("appointment_types", []),
+        "emergency_rules":   settings.get("emergency", {}),
+        "branding": {
+            "greeting_name": branding.get("greeting_name") or practice_name,
+            "voice_style":   branding.get("voice_style") or "professional",
         },
     }
 
