@@ -1,14 +1,10 @@
 """
-E2E registration + onboarding flow test — Enterprise plan.
+E2E plan gate test — Professional plan.
 
-Uses the REAL onboarding API (not the deprecated wizard shims):
-  1. POST /api/auth/signup          — create admin user (no practice yet)
-  2. POST /api/practices            — create practice, select enterprise plan, get new JWT
-  3. POST /api/practices/{id}/complete-onboarding — mark onboarding done
-  4. GET  /api/auth/me              — confirm user has practice_id
-  5. GET  /api/settings/voice       — enterprise gate: custom_voice
-  6. GET  /api/knowledge            — enterprise gate: knowledge_base
-  7. GET  /api/routing-rules        — enterprise gate: custom_routing_rules
+Verifies that a Professional-plan practice:
+  - Can access Professional+ features (analytics, insurance)
+  - Is blocked from Enterprise+ features (knowledge_base, routing_rules)
+  - Is blocked from Elite features (baa)
 
 Environment variables required:
   TEST_API_URL  — must be set explicitly; refuses to default to production
@@ -40,6 +36,7 @@ def _cleanup_practice(practice_id: str) -> None:
     db.practices.delete_one({"id": practice_id})
     mc.close()
 
+
 _raw_api_url = os.environ.get("TEST_API_URL", "").strip()
 if not _raw_api_url:
     pytest.skip(
@@ -53,11 +50,9 @@ PRIVACY_VERSION = "1.1"
 PASSWORD = "TestAdmin2026!"
 
 
-def _random_email(prefix: str = "enterprise-test") -> str:
+def _random_email(prefix: str = "professional-test") -> str:
     return f"{prefix}-{uuid.uuid4().hex[:8]}@example.com"
 
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
@@ -83,7 +78,7 @@ def signup_result(client):
     r = client.post("/api/auth/signup", json={
         "email": email,
         "password": PASSWORD,
-        "full_name": "Test Enterprise",
+        "full_name": "Test Professional",
     })
     _assert_ok(r, "signup")
     data = r.json()
@@ -95,14 +90,14 @@ def signup_result(client):
 
 @pytest.fixture(scope="module")
 def practice_result(client, signup_result):
-    """Step 2 — create Enterprise practice, get new JWT with practice_id."""
+    """Step 2 — create Professional practice, get new JWT with practice_id."""
     r = client.post(
         "/api/practices",
         json={
-            "name": "Enterprise Test Clinic",
+            "name": "Professional Test Clinic",
             "province": "BC",
             "timezone": "America/Vancouver",
-            "plan": "enterprise",
+            "plan": "professional",
             "accepted_terms_version": TERMS_VERSION,
             "accepted_privacy_version": PRIVACY_VERSION,
             "accepted_at": datetime.now(timezone.utc).isoformat(),
@@ -113,7 +108,7 @@ def practice_result(client, signup_result):
     data = r.json()
     assert "access_token" in data, f"create-practice: no access_token in {data}"
     practice = data["practice"]
-    assert practice["subscription_plan"] == "enterprise"
+    assert practice["subscription_plan"] == "professional"
     assert practice["status"] == "onboarding"
     assert "id" in practice
     result = {
@@ -127,7 +122,7 @@ def practice_result(client, signup_result):
 
 @pytest.fixture(scope="module")
 def completed_result(client, practice_result):
-    """Step 3 — complete onboarding, returns success + timestamp."""
+    """Step 3 — complete onboarding."""
     practice_id = practice_result["practice_id"]
     r = client.post(
         f"/api/practices/{practice_id}/complete-onboarding",
@@ -141,17 +136,17 @@ def completed_result(client, practice_result):
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
-class TestEnterpriseRegistrationFlow:
+class TestProfessionalPlanGates:
 
     def test_signup_returns_jwt(self, signup_result):
         assert signup_result["token"], "signup must return a non-empty JWT"
-        assert signup_result["user"]["email"].startswith("enterprise-test-")
+        assert signup_result["user"]["email"].startswith("professional-test-")
 
     def test_signup_no_practice_yet(self, signup_result):
         assert signup_result["user"]["practice_id"] is None
 
-    def test_practice_created_with_enterprise_plan(self, practice_result):
-        assert practice_result["practice"]["subscription_plan"] == "enterprise"
+    def test_practice_created_with_professional_plan(self, practice_result):
+        assert practice_result["practice"]["subscription_plan"] == "professional"
 
     def test_practice_id_in_new_token(self, client, practice_result):
         """New JWT from POST /api/practices must encode practice_id."""
@@ -169,44 +164,38 @@ class TestEnterpriseRegistrationFlow:
         assert data["practice_id"] == practice_result["practice_id"]
         assert data.get("role") == "admin"
 
-    def test_enterprise_gate_voice(self, client, practice_result):
-        """GET /api/settings/voice — gated on custom_voice (enterprise+)."""
-        r = client.get("/api/settings/voice", headers=_headers(practice_result["token"]))
+    def test_professional_analytics_allowed(self, client, practice_result, completed_result):
+        """GET /api/analytics/dashboard — Professional+ feature, must return 200."""
+        r = client.get("/api/analytics/dashboard", headers=_headers(practice_result["token"]))
         assert r.status_code == 200, (
-            f"Enterprise voice endpoint returned {r.status_code} — "
-            f"plan gate may not be active or plan was not set correctly. {r.text}"
+            f"Expected 200 for analytics on Professional plan, got {r.status_code} — "
+            f"plan gate may be over-blocking. {r.text}"
         )
 
-    def test_enterprise_gate_knowledge(self, client, practice_result):
-        """GET /api/knowledge — gated on knowledge_base (enterprise+)."""
+    def test_professional_insurance_allowed(self, client, practice_result, completed_result):
+        """GET /api/insurance/claims — Professional+ feature, must return 200."""
+        r = client.get("/api/insurance/claims", headers=_headers(practice_result["token"]))
+        assert r.status_code == 200, (
+            f"Expected 200 for insurance on Professional plan, got {r.status_code}. {r.text}"
+        )
+
+    def test_professional_gate_knowledge_blocked(self, client, practice_result, completed_result):
+        """GET /api/knowledge — gated on knowledge_base (Enterprise+), must be 403."""
         r = client.get("/api/knowledge", headers=_headers(practice_result["token"]))
-        assert r.status_code == 200, (
-            f"Enterprise knowledge endpoint returned {r.status_code}. {r.text}"
+        assert r.status_code == 402, (
+            f"Expected 402 for knowledge on Professional plan, got {r.status_code}. {r.text}"
         )
 
-    def test_enterprise_gate_routing_rules(self, client, practice_result):
-        """GET /api/routing-rules — gated on custom_routing_rules (enterprise+)."""
+    def test_professional_gate_routing_rules_blocked(self, client, practice_result, completed_result):
+        """GET /api/routing-rules — gated on custom_routing_rules (Enterprise+), must be 403."""
         r = client.get("/api/routing-rules", headers=_headers(practice_result["token"]))
-        assert r.status_code == 200, (
-            f"Enterprise routing-rules endpoint returned {r.status_code}. {r.text}"
+        assert r.status_code == 402, (
+            f"Expected 402 for routing-rules on Professional plan, got {r.status_code}. {r.text}"
         )
 
-    def test_no_plan_gate_failures(self, client, practice_result):
-        """None of the enterprise endpoints should return 402."""
-        endpoints = ["/api/settings/voice", "/api/knowledge", "/api/routing-rules"]
-        h = _headers(practice_result["token"])
-        for ep in endpoints:
-            r = client.get(ep, headers=h)
-            assert r.status_code != 402, (
-                f"{ep} returned 402 Payment Required — enterprise plan gate is blocking. {r.text}"
-            )
-
-    def test_no_auth_failures(self, client, practice_result):
-        """None of the enterprise endpoints should return 401 or 403."""
-        endpoints = ["/api/settings/voice", "/api/knowledge", "/api/routing-rules"]
-        h = _headers(practice_result["token"])
-        for ep in endpoints:
-            r = client.get(ep, headers=h)
-            assert r.status_code not in (401, 403), (
-                f"{ep} returned {r.status_code} — JWT or RBAC issue. {r.text}"
-            )
+    def test_professional_gate_baa_blocked(self, client, practice_result, completed_result):
+        """GET /api/billing/baa — gated on baa_available (Elite only), must be 403."""
+        r = client.get("/api/billing/baa", headers=_headers(practice_result["token"]))
+        assert r.status_code == 402, (
+            f"Expected 402 for billing/baa on Professional plan, got {r.status_code}. {r.text}"
+        )
