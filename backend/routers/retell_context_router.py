@@ -61,21 +61,28 @@ def _verify_webhook_secret(x_retell_secret: str | None = Header(None)) -> None:
 async def _knowledge_auth(
     x_retell_api_key: str | None = Header(None),
     credentials: HTTPAuthorizationCredentials | None = Depends(_optional_bearer),
-) -> None:
+) -> dict | None:
     """
     Dual-auth for knowledge/query.
     Accepts RETELL_API_KEY header (Retell agent path) OR any Bearer JWT
     (frontend / authenticated staff path).
-
-    Backlog: validate JWT's practice_id matches body.practice_id before
-    returning documents (cross-practice scoping hardening).
+    JWT path returns the decoded payload so the endpoint can enforce
+    practice_id scoping.
     """
     if x_retell_api_key is not None:
         if RETELL_API_KEY and x_retell_api_key == RETELL_API_KEY:
-            return
+            return None  # API key path — no practice_id scoping needed
         raise HTTPException(status_code=401, detail="Invalid API key")
     if credentials and credentials.credentials:
-        return  # JWT present — full validation handled by require_role on gated routes
+        try:
+            import jwt as _jwt
+            from auth import SECRET_KEY, ALGORITHM
+            payload = _jwt.decode(
+                credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM]
+            )
+            return payload
+        except Exception:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
     raise HTTPException(status_code=401, detail="Authentication required")
 
 
@@ -218,7 +225,7 @@ async def get_practice_context_for_agent(
 @router.post("/knowledge/query")
 async def query_knowledge_base(
     body: KnowledgeQueryRequest,
-    _auth=Depends(_knowledge_auth),
+    _auth: dict | None = Depends(_knowledge_auth),
 ):
     """
     Keyword-scored search against the practice's active knowledge base.
@@ -228,6 +235,12 @@ async def query_knowledge_base(
          1 keyword match         → confidence "low"
          0 matches               → {"answer": null, "confidence": "none"}
     """
+    if _auth is not None and _auth.get("practice_id"):
+        if _auth["practice_id"] != body.practice_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied to this practice's knowledge base",
+            )
     db = get_db()
     docs = await db.knowledge_documents.find(
         {"practice_id": body.practice_id, "is_active": True},
