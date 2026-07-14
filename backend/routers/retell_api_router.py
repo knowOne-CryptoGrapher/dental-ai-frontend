@@ -900,7 +900,38 @@ async def book_appointment_realtime(
     if provider_id:
         appointment_doc["provider_id"] = provider_id
         appointment_doc["provider_name"] = matched_provider_name
-    
+
+    # Double booking check — prevent same provider + date + time collision
+    conflict_query = {
+        "practice_id": practice_id,
+        "appointment_date": appointment_date,
+        "appointment_time": appointment_time,
+        "status": {"$in": ["scheduled", "confirmed", "pending_verification"]},
+    }
+    if provider_id:
+        conflict_query["provider_id"] = provider_id
+    else:
+        conflict_query["patient_id"] = patient_id
+
+    existing_appt = await db.appointments.find_one(conflict_query, {"_id": 0, "id": 1, "patient_name": 1})
+    if existing_appt:
+        logger.warning(
+            "book_appointment_conflict",
+            extra={
+                "practice_id": practice_id,
+                "date": appointment_date,
+                "time": appointment_time,
+                "provider_id": provider_id,
+                "conflicting_id": existing_appt.get("id"),
+            }
+        )
+        return {
+            "success": False,
+            "conflict": True,
+            "message": f"That time slot is already booked. Please choose a different time.",
+            "conflicting_appointment_id": existing_appt.get("id"),
+        }
+
     await db.appointments.insert_one(appointment_doc)
     
     # Build friendly message
