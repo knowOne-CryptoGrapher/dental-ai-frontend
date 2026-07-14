@@ -69,6 +69,14 @@ async def stripe_webhook(request: Request):
 
   db = get_db()
 
+  # Deduplicate: Stripe delivers at-least-once; skip already-processed events
+  event_id = event_dict.get("id")
+  if event_id:
+      existing = await db.stripe_webhook_events.find_one({"event_id": event_id})
+      if existing:
+          logger.info("stripe_webhook_duplicate_skipped", extra={"event_id": event_id})
+          return {"status": "ok", "skipped": True}
+
   # Persist raw event for audit / replay debugging
   await db.stripe_webhook_events.insert_one(
     {

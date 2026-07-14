@@ -24,7 +24,13 @@ def _get_client(uri: str):
     """Return a cached Motor client for the given URI."""
     from motor.motor_asyncio import AsyncIOMotorClient
     if uri not in _clients:
-        _clients[uri] = AsyncIOMotorClient(uri)
+        _clients[uri] = AsyncIOMotorClient(
+            uri,
+            serverSelectionTimeoutMS=5000,
+            connectTimeoutMS=5000,
+            maxPoolSize=10,
+            minPoolSize=1,
+        )
         logger.info("db_client_created", extra={"cluster": uri[:40] + "..."})
     return _clients[uri]
 

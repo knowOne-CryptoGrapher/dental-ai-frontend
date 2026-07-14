@@ -21,12 +21,13 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Surface 401s as a clear console warning — helps diagnose session expiry.
+// On 401, clear the stale token and force a clean login.
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      console.warn("api: 401 Unauthorized — token may be expired or missing");
+      localStorage.removeItem('dental_token');
+      window.location.href = '/login';
     }
     return Promise.reject(error);
   }

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import pytz
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
@@ -101,6 +102,14 @@ async def get_practice_context(
     branding      = settings.get("branding") or {}
     practice_name = practice.get("name", "")
 
+    tz_name = practice.get("timezone", "America/Toronto")
+    try:
+        tz = pytz.timezone(tz_name)
+        now_local = datetime.now(timezone.utc).astimezone(tz)
+    except Exception:
+        now_local = datetime.now(timezone.utc)
+        tz_name = "UTC"
+
     providers = await db.providers.find(
         {"practice_id": practice_id, "$or": [{"is_active": True}, {"active": True}]},
         {"_id": 0, "name": 1, "role": 1, "specialties": 1, "title": 1},
@@ -109,7 +118,11 @@ async def get_practice_context(
     return {
         "practice_id": practice_id,
         "practice_name": practice_name,
-        "timezone": practice.get("timezone", "America/Toronto"),
+        "timezone": tz_name,
+        "current_date": now_local.strftime("%Y-%m-%d"),
+        "current_day_name": now_local.strftime("%A"),
+        "current_time_local": now_local.strftime("%H:%M"),
+        "current_datetime_iso": now_local.isoformat(),
         "subscription_plan": practice.get("subscription_plan", ""),
         "hours": settings.get("hours", {}),
         "providers": [

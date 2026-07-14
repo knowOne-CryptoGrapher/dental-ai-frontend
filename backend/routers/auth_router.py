@@ -34,7 +34,8 @@ def _user_response(user: dict) -> dict:
 
 
 @router.post("/signup")
-async def signup(data: SignupRequest):
+@limiter.limit("10/hour")
+async def signup(request: Request, data: SignupRequest):
     """
     Create a new admin user account without a practice.
     The practice is created separately via POST /api/practices.
@@ -82,7 +83,8 @@ async def signup(data: SignupRequest):
 
 
 @router.post("/register")
-async def register(data: UserRegister):
+@limiter.limit("10/hour")
+async def register(request: Request, data: UserRegister):
     """Register a new practice admin (creates practice + admin user)"""
     try:
         db = get_db()

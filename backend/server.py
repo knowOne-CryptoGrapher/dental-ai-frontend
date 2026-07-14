@@ -238,7 +238,13 @@ async def startup_event():
     if not mongo_uri:
         raise RuntimeError("MONGODB_URI environment variable is not set")
 
-    _mongo_client = AsyncIOMotorClient(mongo_uri)
+    _mongo_client = AsyncIOMotorClient(
+        mongo_uri,
+        serverSelectionTimeoutMS=5000,
+        connectTimeoutMS=5000,
+        maxPoolSize=20,
+        minPoolSize=2,
+    )
     set_db(_mongo_client[db_name])
     logger.info("mongodb_connected", extra={"db_name": db_name})
 
