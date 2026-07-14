@@ -16,6 +16,17 @@ const SECTIONS = [
     body: 'Dental AI is offered on a subscription basis and billed monthly (or as otherwise agreed in writing). You may cancel at any time, and your subscription will remain active until the end of the current billing period. Refunds are not provided for partial billing periods. Plan upgrades or downgrades may take effect immediately and may change your billing amount on a pro-rated basis.',
   },
   {
+    title: '3a. AI Technology Disclosure',
+    body: 'Dental AI uses artificial intelligence to power the virtual receptionist experience. By using the service, you acknowledge and agree that:',
+    bullets: [
+      'The virtual receptionist is an AI, not a human. Callers are informed of this at the start of each call.',
+      'AI responses are generated automatically and may occasionally be inaccurate, incomplete, or unsuitable for a specific situation. Your practice remains responsible for reviewing AI-generated data (such as appointment bookings, call summaries, and patient records) before acting on it.',
+      'Calls are recorded and transcribed by our telephony provider (Retell AI). Transcripts are processed by AI language model providers (Anthropic, Groq) to generate responses. PHI redaction is applied before transmission to AI providers.',
+      'Your practice is responsible for ensuring that appropriate notices, disclosures, and consents are provided to patients and callers in your jurisdiction regarding AI-assisted interactions and call recording.',
+      'The AI does not provide medical or dental advice. Patients requiring clinical guidance must be directed to a qualified dental professional.',
+    ],
+  },
+  {
     title: '4. Acceptable Use',
     body: 'You agree not to:',
     bullets: [
@@ -80,7 +91,7 @@ export default function TermsOfServicePage() {
       <section className="bg-slate-50 border-b border-slate-200 py-14">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <h1 className="text-4xl font-bold text-slate-900 mb-2">Terms of Service</h1>
-          <p className="text-sm text-slate-500">Last updated: June 2026</p>
+          <p className="text-sm text-slate-500">Last updated: July 14, 2026 — v1.2</p>
         </div>
       </section>
 

@@ -9,6 +9,11 @@ from typing import List
 
 from agent.prompt_renderer import render_amanda_prompt
 
+_RECORDING_NOTICE = (
+    "This call is being recorded and handled by an AI virtual receptionist. "
+    "To speak with a human, say 'transfer' at any time."
+)
+
 
 async def render_prompt(practice: dict, db) -> str:
     """
@@ -32,4 +37,7 @@ async def render_prompt(practice: dict, db) -> str:
             {"_id": 0},
         ).to_list(100)
 
-    return render_amanda_prompt(practice, providers)
+    rendered = render_amanda_prompt(practice, providers)
+    if _RECORDING_NOTICE not in rendered:
+        rendered = _RECORDING_NOTICE + "\n\n" + rendered
+    return rendered

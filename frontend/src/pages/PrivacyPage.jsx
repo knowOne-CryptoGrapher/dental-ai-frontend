@@ -5,7 +5,7 @@ import LandingFooter from '../components/landing/LandingFooter';
 const SECTIONS = [
   {
     title: '1. Introduction',
-    body: 'Dental AI (“we”, “us”, “our”) provides an AI-powered receptionist platform for dental practices. We are committed to protecting privacy and handling personal information in accordance with the Personal Information Protection and Electronic Documents Act (PIPEDA) and the BC Personal Information Protection Act (PIPA). This policy explains how we collect, use, disclose, and protect personal and health information.',
+    body: 'Dental AI ("we", "us", "our") provides an AI-powered receptionist platform for dental practices. We are committed to protecting privacy and handling personal information in accordance with the Personal Information Protection and Electronic Documents Act (PIPEDA) and the BC Personal Information Protection Act (PIPA). This policy explains how we collect, use, disclose, and protect personal and health information.',
     body2: 'For most practice and patient data, we act as a service provider / processor to dental practices, who remain responsible for their own compliance obligations and for providing any required notices and consents to their patients.',
   },
   {
@@ -36,9 +36,20 @@ const SECTIONS = [
   {
     title: '4. Data Residency',
     body: 'For Canadian customers, practice and patient data are stored in Canadian data centers (e.g., ca-west or ca-east regions). Our goal is to keep your data in Canada. Where limited cross-border access is required by our infrastructure or service providers (for example, for support or failover), it is governed by appropriate data protection agreements and safeguards.',
+    body2: 'AI reasoning and transcription services (voice processing and language model inference) may process call audio and transcripts through our AI providers\' infrastructure, which is located in the United States. Before any text is sent to AI reasoning models, we apply PHI redaction to minimize the transmission of identifiable health information. We require our AI providers to process this data only as necessary to deliver the service and to prohibit its use for their own independent model training.',
   },
   {
-    title: '5. PHI Protection and Model Use',
+    title: '5. Call Recording and AI Transcription',
+    body: 'When a patient calls your practice through Dental AI, the call is handled by an AI virtual receptionist. Calls are recorded and transcribed by our telephony and AI processing providers for the purpose of delivering the service — including scheduling appointments, answering questions, and routing calls.',
+    bullets: [
+      'Callers are notified at the start of each call that the call is being handled by an AI virtual receptionist.',
+      'Recordings and transcripts are stored in accordance with the retention period configured by your practice (default: 7 years).',
+      'Transcripts are processed through AI language model providers to understand caller intent and generate responses. PHI redaction is applied where technically feasible before transmission.',
+      'Your practice is responsible for ensuring that call recording notices and patient consents are in place as required by applicable law in your jurisdiction.',
+    ],
+  },
+  {
+    title: '6. PHI Protection and Model Use',
     body: 'Patient health information (PHI) is handled in accordance with applicable health privacy requirements, including PIPEDA and relevant provincial laws. In particular:',
     bullets: [
       'PHI is redacted from application logs wherever technically feasible.',
@@ -48,23 +59,24 @@ const SECTIONS = [
     ],
   },
   {
-    title: '6. Data Retention',
+    title: '7. Data Retention',
     body: 'You control your data retention period from your practice dashboard (default: 7 years, in line with common Canadian dental record retention expectations). After the configured retention period, data is deleted or anonymized from active systems and backups in accordance with our retention procedures.',
     body2: 'You may request deletion of specific data or your account at any time by contacting support, subject to any legal or regulatory retention requirements that apply to you as a health care provider.',
   },
   {
-    title: '7. Third-Party Services',
-    body: 'Dental AI integrates with third-party service providers, including:',
+    title: '8. Third-Party Services',
+    body: 'Dental AI integrates with third-party service providers to deliver the platform. Each provider acts as our processor or sub-processor and is bound by appropriate data processing and security agreements. We only share the minimum necessary information to provide the service and do not permit them to use your data for their own marketing or unrelated purposes.',
     bullets: [
-      'Retell AI (voice processing and telephony)',
-      'Stripe (billing and payments)',
-      'MongoDB Atlas (database and data storage)',
-      'Google Cloud (infrastructure and hosting)',
+      'Retell AI — voice call routing, recording, and transcription (Voice)',
+      'Anthropic (Claude) and Groq (Llama 3) — AI language model inference for generating responses (AI Reasoning). These providers receive PHI-redacted transcripts only.',
+      'MongoDB Atlas — database and data storage, hosted in Canadian regions (Storage)',
+      'Stripe — payment processing and billing management (Billing)',
+      'Amazon Web Services SES — transactional email delivery (Email)',
+      'Crisp — live chat and customer support messaging (Chat)',
     ],
-    body3: 'These providers act as our processors or sub-processors and are bound by appropriate data processing and security agreements. We only share the minimum necessary information with them to provide the service, and we do not permit them to use your data for their own marketing or unrelated purposes.',
   },
   {
-    title: '8. Your Rights',
+    title: '9. Your Rights',
     body: 'Under PIPEDA and applicable provincial laws, you may have the right to:',
     bullets: [
       'Access the personal information we hold about you.',
@@ -75,19 +87,19 @@ const SECTIONS = [
     body3: 'To exercise these rights, contact us at privacy@dentalai.ca. For patient data, we may direct you to contact your dental practice, who is typically the controller of that information.',
   },
   {
-    title: '9. Children and Minors',
+    title: '10. Children and Minors',
     body: 'Dental AI is designed for use by dental practices and their authorized staff, not by patients or minors directly. Any information about minors is processed on behalf of the dental practice in the course of providing care.',
   },
   {
-    title: '10. Security',
+    title: '11. Security',
     body: 'We use reasonable physical, technical, and administrative safeguards to protect personal information, including encryption in transit, access controls, and audit logging. No system is perfectly secure, but we work continuously to improve our security posture.',
   },
   {
-    title: '11. Changes to This Policy',
-    body: 'We may update this Privacy Policy from time to time. When we do, we will update the “Last updated” date and, where appropriate, provide additional notice (for example, via email or in-app notification). Your continued use of the service after changes take effect constitutes acceptance of the updated policy.',
+    title: '12. Changes to This Policy',
+    body: 'We may update this Privacy Policy from time to time. When we do, we will update the "Last updated" date and, where appropriate, provide additional notice (for example, via email or in-app notification). Your continued use of the service after changes take effect constitutes acceptance of the updated policy.',
   },
   {
-    title: '12. Contact',
+    title: '13. Contact',
     contact: { email: 'privacy@dentalai.ca', org: 'Dental AI — Canada' },
   },
 ];
@@ -101,7 +113,7 @@ export default function PrivacyPage() {
       <section className="bg-slate-50 border-b border-slate-200 py-14">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <h1 className="text-4xl font-bold text-slate-900 mb-2">Privacy Policy</h1>
-          <p className="text-sm text-slate-500">Last updated: June 2026</p>
+          <p className="text-sm text-slate-500">Last updated: July 14, 2026 — v1.1</p>
         </div>
       </section>
 
