@@ -331,6 +331,9 @@ app.include_router(routing_rules_router)
 app.include_router(ses_webhook_router)
 app.include_router(sales_router)
 
+from routers.admin_email_router import router as admin_email_router
+app.include_router(admin_email_router)
+
 # -------------------------------------------------------------------
 # Global Error Handler
 # -------------------------------------------------------------------

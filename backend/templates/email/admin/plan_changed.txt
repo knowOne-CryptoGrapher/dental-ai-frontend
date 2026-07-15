@@ -1,0 +1,13 @@
+SUBSCRIPTION PLAN CHANGED — $practice_name
+============================================
+
+Your Dental AI subscription plan has been updated.
+
+Previous Plan : $old_plan
+New Plan      : $new_plan
+Effective Date: $effective_date
+
+Dashboard: $dashboard_url
+
+--
+$footer_text | $year

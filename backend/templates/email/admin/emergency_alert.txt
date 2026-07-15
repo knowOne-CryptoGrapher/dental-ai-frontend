@@ -1,0 +1,16 @@
+FOLLOW-UP REQUIRED — $practice_name
+=====================================
+
+An incoming call has been flagged for follow-up by your AI receptionist.
+
+Caller Phone : $caller_phone
+Reason / Type: $emergency_type
+Call Time    : $call_time
+
+Transcript excerpt:
+"$transcript_excerpt"
+
+View call log: $dashboard_url
+
+--
+$footer_text | $year

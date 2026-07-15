@@ -236,6 +236,98 @@ class EmailService:
 
         return False
 
+    async def send_admin_notification(
+        self,
+        *,
+        db,
+        practice_id: str,
+        admin_email: str,
+        template_name: str,
+        subject: str,
+        template_vars: dict,
+        practice_branding: dict | None = None,
+    ) -> bool:
+        """Send a practice admin notification email and log the attempt.
+
+        Templates are loaded from backend/templates/email/admin/<template_name>.{html,txt}.
+        Logs every attempt to db.admin_email_logs regardless of outcome.
+        Never raises.
+        """
+        ctx = {
+            "practice_id": practice_id,
+            "template": template_name,
+            "to": self._mask(admin_email),
+        }
+        now_iso = datetime.utcnow().isoformat()
+        success = False
+
+        try:
+            html_content, txt_content = self._render(
+                f"admin/{template_name}", template_vars, practice_branding
+            )
+            from_addr = (
+                f"{SES_FROM_NAME} <{SES_FROM_EMAIL}>"
+                if SES_FROM_EMAIL
+                else "Dental AI <noreply@dentalai.ca>"
+            )
+            kwargs = dict(
+                Source=from_addr,
+                Destination={"ToAddresses": [admin_email]},
+                Message={
+                    "Subject": {"Data": subject, "Charset": "UTF-8"},
+                    "Body": {
+                        "Html": {"Data": html_content, "Charset": "UTF-8"},
+                        "Text": {"Data": txt_content,  "Charset": "UTF-8"},
+                    },
+                },
+            )
+
+            for attempt in range(_MAX_RETRIES + 1):
+                try:
+                    client = self._get_client()
+                    await asyncio.to_thread(client.send_email, **kwargs)
+                    logger.info("admin_notification_sent", extra={**ctx, "attempt": attempt + 1})
+                    success = True
+                    break
+                except ClientError as exc:
+                    code = exc.response["Error"]["Code"]
+                    if code == "Throttling" and attempt < _MAX_RETRIES:
+                        wait = 2 ** attempt
+                        logger.warning(
+                            "admin_notification_throttled",
+                            extra={**ctx, "retry": attempt + 1, "wait_s": wait},
+                        )
+                        await asyncio.sleep(wait)
+                        continue
+                    logger.error(
+                        "admin_notification_ses_error",
+                        extra={**ctx, "error_code": code, "error": str(exc)},
+                    )
+                    break
+                except Exception as exc:
+                    logger.error(
+                        "admin_notification_unexpected_error",
+                        extra={**ctx, "error": str(exc)},
+                    )
+                    break
+
+        except Exception as exc:
+            logger.error("admin_notification_render_error", extra={**ctx, "error": str(exc)})
+
+        try:
+            await db.admin_email_logs.insert_one({
+                "practice_id": practice_id,
+                "template_name": template_name,
+                "subject": subject,
+                "to": admin_email,
+                "success": success,
+                "timestamp": now_iso,
+            })
+        except Exception as exc:
+            logger.error("admin_email_log_write_error", extra={**ctx, "error": str(exc)})
+
+        return success
+
 
 # Module-level singleton used across all routers
 email_service = EmailService()

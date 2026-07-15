@@ -23,6 +23,7 @@ from fastapi import APIRouter, Request, HTTPException
 
 from auth import get_db
 import stripe as stripe_sdk
+from services.email_service import email_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["stripe_webhook"])
@@ -218,6 +219,14 @@ async def _sync_subscription_state(db, event_type: str, obj: dict):
   elif event_type == "invoice.paid":
     new_status = "active"
 
+  # Snapshot practice before update to capture old plan for plan_changed notification
+  _practice_snap: dict | None = None
+  if new_status == "past_due" or new_plan is not None:
+    _practice_snap = await db.practices.find_one(
+      {"stripe_customer_id": customer_id},
+      {"_id": 0, "id": 1, "name": 1, "subscription_plan": 1, "settings": 1},
+    )
+
   if new_status:
     update_fields: dict = {
       "billing_status": new_status,
@@ -236,3 +245,48 @@ async def _sync_subscription_state(db, event_type: str, obj: dict):
       logger.info(
         f"🔄 Stripe → practice billing_status={new_status} plan={new_plan} (customer={customer_id})"
       )
+      # Non-blocking admin billing notifications
+      if _practice_snap:
+        try:
+          _frontend_url = os.getenv("FRONTEND_URL", "https://app.dentalai.ca")
+          _admin_email = (_practice_snap.get("settings") or {}).get("admin_email")
+          _notif = (_practice_snap.get("settings") or {}).get("email_notifications") or {}
+          _practice_name = _practice_snap.get("name", "Your Practice")
+          _practice_id = _practice_snap.get("id", "")
+          if _admin_email:
+            if new_status == "past_due" and _notif.get("billing_alerts", True):
+              await email_service.send_admin_notification(
+                db=db,
+                practice_id=_practice_id,
+                admin_email=_admin_email,
+                template_name="billing_past_due",
+                subject=f"Payment Past Due — {_practice_name}",
+                template_vars={
+                  "practice_name": _practice_name,
+                  "plan_name": (_practice_snap.get("subscription_plan") or "unknown").title(),
+                  "amount_due": "See billing portal",
+                  "due_date": "Please update your payment method",
+                  "portal_url": f"{_frontend_url}/billing",
+                  "dashboard_url": f"{_frontend_url}/dashboard",
+                },
+              )
+            if new_plan and _notif.get("plan_change_alerts", True):
+              await email_service.send_admin_notification(
+                db=db,
+                practice_id=_practice_id,
+                admin_email=_admin_email,
+                template_name="plan_changed",
+                subject=f"Subscription Plan Changed — {_practice_name}",
+                template_vars={
+                  "practice_name": _practice_name,
+                  "old_plan": (_practice_snap.get("subscription_plan") or "previous plan").title(),
+                  "new_plan": new_plan.title(),
+                  "effective_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                  "dashboard_url": f"{_frontend_url}/dashboard",
+                },
+              )
+        except Exception as _exc:
+          logger.error(
+            "admin_email_billing_notification_error",
+            extra={"error": str(_exc), "customer_id": customer_id},
+          )

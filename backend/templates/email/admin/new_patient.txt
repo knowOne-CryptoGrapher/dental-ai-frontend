@@ -1,0 +1,13 @@
+NEW PATIENT REGISTERED — $practice_name
+=========================================
+
+A new patient has been registered through your AI receptionist.
+
+Patient Name : $patient_name
+Phone        : $patient_phone
+Registered At: $registered_at
+
+View patients: $dashboard_url
+
+--
+$footer_text | $year

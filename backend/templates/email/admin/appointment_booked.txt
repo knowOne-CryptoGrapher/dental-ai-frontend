@@ -1,0 +1,16 @@
+NEW APPOINTMENT BOOKED — $practice_name
+========================================
+
+Your AI receptionist has scheduled a new appointment.
+
+Patient Name : $patient_name
+Patient Phone: $patient_phone
+Date         : $appointment_date
+Time         : $appointment_time
+Provider     : $provider_name
+Reason       : $reason
+
+View appointment: $dashboard_url
+
+--
+$footer_text | $year

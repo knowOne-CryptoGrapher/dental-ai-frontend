@@ -1,0 +1,14 @@
+APPOINTMENT CANCELLED — $practice_name
+=======================================
+
+A patient has cancelled their appointment.
+
+Patient Name : $patient_name
+Original Date: $appointment_date
+Original Time: $appointment_time
+Provider     : $provider_name
+
+View appointments: $dashboard_url
+
+--
+$footer_text | $year

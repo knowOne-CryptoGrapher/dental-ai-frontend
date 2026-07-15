@@ -19,6 +19,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 from auth import get_db, require_role
+from services.email_service import email_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["retell_context"])
@@ -347,6 +348,44 @@ async def ingest_call_summary(
             "retell_follow_up_created",
             extra={"call_id": body.call_id, "practice_id": body.practice_id},
         )
+
+        # Non-blocking admin email for follow-up flagged calls
+        try:
+            _practice = await db.practices.find_one(
+                {"id": body.practice_id},
+                {"_id": 0, "name": 1, "settings": 1},
+            )
+            _notif = ((_practice or {}).get("settings") or {}).get("email_notifications") or {}
+            if _notif.get("emergency_alerts", True):
+                _admin_email = ((_practice or {}).get("settings") or {}).get("admin_email")
+                if _admin_email:
+                    _call_log = await db.call_logs.find_one(
+                        {"call_id": body.call_id}, {"_id": 0, "patient_phone": 1}
+                    )
+                    _frontend_url = os.getenv("FRONTEND_URL", "https://app.dentalai.ca")
+                    _excerpt = (body.transcript or "")[:500].strip()
+                    _practice_name = (_practice or {}).get("name", "Your Practice")
+                    await email_service.send_admin_notification(
+                        db=db,
+                        practice_id=body.practice_id,
+                        admin_email=_admin_email,
+                        template_name="emergency_alert",
+                        subject=f"Follow-Up Required — {_practice_name}",
+                        template_vars={
+                            "practice_name": _practice_name,
+                            "caller_phone": ((_call_log or {}).get("patient_phone") or "unknown"),
+                            "emergency_type": body.reason or "Follow-up needed",
+                            "transcript_excerpt": _excerpt or "(no transcript)",
+                            "call_time": now_iso,
+                            "dashboard_url": f"{_frontend_url}/dashboard/call-logs",
+                        },
+                        practice_branding=(_practice or {}).get("settings"),
+                    )
+        except Exception as _exc:
+            logger.error(
+                "admin_email_followup_notification_error",
+                extra={"error": str(_exc), "call_id": body.call_id},
+            )
 
     logger.info(
         "retell_call_summary_ingested",

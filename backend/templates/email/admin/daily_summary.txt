@@ -1,0 +1,13 @@
+DAILY SUMMARY — $practice_name
+================================
+$summary_date
+
+Total Calls          : $total_calls
+Appointments Booked  : $appointments_booked
+New Patients         : $new_patients
+Follow-Ups Flagged   : $emergencies
+
+View full report: $dashboard_url
+
+--
+$footer_text | $year

@@ -1,0 +1,15 @@
+PAYMENT PAST DUE — $practice_name
+===================================
+
+Your Dental AI subscription payment is past due. Please update your payment
+method to avoid interruption to your AI receptionist service.
+
+Plan      : $plan_name
+Amount Due: $amount_due
+Due Date  : $due_date
+
+Update payment method: $portal_url
+Dashboard            : $dashboard_url
+
+--
+$footer_text | $year
