@@ -142,6 +142,33 @@ spec:
             secretKeyRef:
               name: RETELL_WEBHOOK_SECRET
               key: latest
+        - name: SES_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: SES_ACCESS_KEY_ID
+              key: latest
+        - name: SES_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: SES_SECRET_ACCESS_KEY
+              key: latest
+        - name: SES_REGION
+          valueFrom:
+            secretKeyRef:
+              name: SES_REGION
+              key: latest
+        - name: SES_FROM_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: SES_FROM_EMAIL
+              key: latest
+        - name: SES_FROM_NAME
+          valueFrom:
+            secretKeyRef:
+              name: SES_FROM_NAME
+              key: latest
+        - name: SES_CONFIGURATION_SET
+          value: ""
   traffic:
   - percent: 100
     latestRevision: true

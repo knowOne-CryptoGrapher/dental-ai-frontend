@@ -1,5 +1,5 @@
 """
-EmailService — sends transactional email via AWS SES.
+EmailService — sends transactional email via AWS SES v2.
 
 Design principles:
   - Never raises. All failures return False and log the reason.
@@ -7,10 +7,12 @@ Design principles:
   - Templates are loaded from backend/templates/email/ using Python string.Template.
   - SES client is initialised lazily so local-dev imports succeed even without SES vars.
   - Throttling is retried up to 3 times with exponential backoff (1s, 2s, 4s).
+  - Recipients on the suppression list (bounced/complained) are silently skipped.
 """
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import os
 import string
@@ -19,6 +21,8 @@ from datetime import datetime
 import boto3
 from botocore.exceptions import ClientError
 
+from auth import get_db
+
 logger = logging.getLogger(__name__)
 
 SES_ACCESS_KEY_ID     = os.environ.get("SES_ACCESS_KEY_ID", "").strip()
@@ -26,6 +30,7 @@ SES_SECRET_ACCESS_KEY = os.environ.get("SES_SECRET_ACCESS_KEY", "").strip()
 SES_REGION            = os.environ.get("SES_REGION", "us-east-1").strip()
 SES_FROM_EMAIL        = os.environ.get("SES_FROM_EMAIL", "").strip()
 SES_FROM_NAME         = os.environ.get("SES_FROM_NAME", "Front Desk Dental AI").strip()
+SES_CONFIGURATION_SET = os.environ.get("SES_CONFIGURATION_SET", "").strip()
 
 # Resolve template directory relative to this file: backend/services/ → backend/templates/email/
 _TEMPLATE_DIR = os.path.normpath(
@@ -45,7 +50,7 @@ class EmailService:
             if not SES_ACCESS_KEY_ID or not SES_SECRET_ACCESS_KEY:
                 raise RuntimeError("SES credentials not configured — set SES_ACCESS_KEY_ID and SES_SECRET_ACCESS_KEY")
             self._client = boto3.client(
-                "ses",
+                "sesv2",
                 region_name=SES_REGION,
                 aws_access_key_id=SES_ACCESS_KEY_ID,
                 aws_secret_access_key=SES_SECRET_ACCESS_KEY,
@@ -88,6 +93,15 @@ class EmailService:
     def _mask(email: str) -> str:
         return (email[:3] + "***") if len(email) > 3 else "***"
 
+    async def _is_suppressed(self, email: str, db) -> bool:
+        """Check if email is on the suppression list before sending."""
+        try:
+            h = hashlib.sha256(email.lower().strip().encode()).hexdigest()
+            hit = await db.email_suppression_list.find_one({"email_hash": h})
+            return hit is not None
+        except Exception:
+            return False  # fail open — don't block email on DB error
+
     # ── Public API ────────────────────────────────────────────────────────────
 
     async def send(
@@ -102,7 +116,7 @@ class EmailService:
         reply_to: str | None = None,
     ) -> bool:
         """
-        Send a templated email via SES.
+        Send a templated email via SES v2.
 
         Returns True on success, False on any failure.
         Never raises — all exceptions are caught and logged.
@@ -120,6 +134,11 @@ class EmailService:
 
         ctx = {"practice_id": practice_id, "to": self._mask(to_email), "template": template_name}
 
+        db = get_db()
+        if await self._is_suppressed(to_email, db):
+            logger.warning("email_suppressed", extra={**ctx, "reason": "suppression_list"})
+            return False
+
         try:
             html_content, txt_content = self._render(template_name, template_vars, practice_branding)
         except Exception as exc:
@@ -127,21 +146,24 @@ class EmailService:
             return False
 
         source = f"{SES_FROM_NAME} <{SES_FROM_EMAIL}>"
-        message = {
-            "Subject": {"Data": subject, "Charset": "UTF-8"},
-            "Body": {
-                "Text": {"Data": txt_content, "Charset": "UTF-8"},
-                "Html":  {"Data": html_content, "Charset": "UTF-8"},
+        kwargs: dict = {
+            "FromEmailAddress": source,
+            "Destination": {"ToAddresses": [to_email]},
+            "Content": {
+                "Simple": {
+                    "Subject": {"Data": subject, "Charset": "UTF-8"},
+                    "Body": {
+                        "Text": {"Data": txt_content, "Charset": "UTF-8"},
+                        "Html": {"Data": html_content, "Charset": "UTF-8"},
+                    },
+                },
             },
+            "EmailTags": [{"Name": "practice_id", "Value": practice_id}],
         }
-        kwargs: dict = dict(
-            Source=source,
-            Destination={"ToAddresses": [to_email]},
-            Message=message,
-            Tags=[{"Name": "practice_id", "Value": practice_id}],
-        )
         if reply_to:
             kwargs["ReplyToAddresses"] = [reply_to]
+        if SES_CONFIGURATION_SET:
+            kwargs["ConfigurationSetName"] = SES_CONFIGURATION_SET
 
         for attempt in range(_MAX_RETRIES + 1):
             try:
@@ -152,7 +174,7 @@ class EmailService:
 
             except ClientError as exc:
                 code = exc.response["Error"]["Code"]
-                if code == "Throttling" and attempt < _MAX_RETRIES:
+                if code == "TooManyRequestsException" and attempt < _MAX_RETRIES:
                     wait = 2 ** attempt  # 1s → 2s → 4s
                     logger.warning(
                         "email_throttled_retry",
@@ -172,7 +194,6 @@ class EmailService:
 
         return False
 
-
     async def send_internal_notification(
         self,
         *,
@@ -184,6 +205,7 @@ class EmailService:
         Send an internal platform notification (e.g. sales leads, ops alerts).
         NOT tenant-scoped — does not require practice_id.
         Use only for internal team notifications, never for customer-facing email.
+        Suppression list is not checked — internal addresses are always valid.
         """
         if not SES_FROM_EMAIL:
             logger.error("internal_notification_blocked_no_sender")
@@ -192,14 +214,18 @@ class EmailService:
         source = f"{SES_FROM_NAME} <{SES_FROM_EMAIL}>"
         ctx = {"to": self._mask(to_email), "subject": subject[:60]}
 
-        kwargs = dict(
-            Source=source,
-            Destination={"ToAddresses": [to_email]},
-            Message={
-                "Subject": {"Data": subject, "Charset": "UTF-8"},
-                "Body":    {"Text": {"Data": body_text, "Charset": "UTF-8"}},
+        kwargs: dict = {
+            "FromEmailAddress": source,
+            "Destination": {"ToAddresses": [to_email]},
+            "Content": {
+                "Simple": {
+                    "Subject": {"Data": subject, "Charset": "UTF-8"},
+                    "Body": {"Text": {"Data": body_text, "Charset": "UTF-8"}},
+                },
             },
-        )
+        }
+        if SES_CONFIGURATION_SET:
+            kwargs["ConfigurationSetName"] = SES_CONFIGURATION_SET
 
         for attempt in range(_MAX_RETRIES + 1):
             try:
@@ -213,7 +239,7 @@ class EmailService:
 
             except ClientError as exc:
                 code = exc.response["Error"]["Code"]
-                if code == "Throttling" and attempt < _MAX_RETRIES:
+                if code == "TooManyRequestsException" and attempt < _MAX_RETRIES:
                     wait = 2 ** attempt
                     logger.warning(
                         "internal_notification_throttled",
@@ -261,6 +287,10 @@ class EmailService:
         now_iso = datetime.utcnow().isoformat()
         success = False
 
+        if await self._is_suppressed(admin_email, db):
+            logger.warning("admin_email_suppressed", extra={**ctx, "reason": "suppression_list"})
+            return False
+
         try:
             html_content, txt_content = self._render(
                 f"admin/{template_name}", template_vars, practice_branding
@@ -270,17 +300,21 @@ class EmailService:
                 if SES_FROM_EMAIL
                 else "Dental AI <noreply@dentalai.ca>"
             )
-            kwargs = dict(
-                Source=from_addr,
-                Destination={"ToAddresses": [admin_email]},
-                Message={
-                    "Subject": {"Data": subject, "Charset": "UTF-8"},
-                    "Body": {
-                        "Html": {"Data": html_content, "Charset": "UTF-8"},
-                        "Text": {"Data": txt_content,  "Charset": "UTF-8"},
+            kwargs: dict = {
+                "FromEmailAddress": from_addr,
+                "Destination": {"ToAddresses": [admin_email]},
+                "Content": {
+                    "Simple": {
+                        "Subject": {"Data": subject, "Charset": "UTF-8"},
+                        "Body": {
+                            "Html": {"Data": html_content, "Charset": "UTF-8"},
+                            "Text": {"Data": txt_content, "Charset": "UTF-8"},
+                        },
                     },
                 },
-            )
+            }
+            if SES_CONFIGURATION_SET:
+                kwargs["ConfigurationSetName"] = SES_CONFIGURATION_SET
 
             for attempt in range(_MAX_RETRIES + 1):
                 try:
@@ -291,7 +325,7 @@ class EmailService:
                     break
                 except ClientError as exc:
                     code = exc.response["Error"]["Code"]
-                    if code == "Throttling" and attempt < _MAX_RETRIES:
+                    if code == "TooManyRequestsException" and attempt < _MAX_RETRIES:
                         wait = 2 ** attempt
                         logger.warning(
                             "admin_notification_throttled",

@@ -10,6 +10,7 @@ Endpoint: POST /api/webhooks/ses
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import logging
 import uuid
@@ -89,6 +90,35 @@ async def _verify_sns_signature(payload: dict) -> bool:
         return False
 
 
+# ── Suppression list ─────────────────────────────────────────────────────────
+
+def _email_hash(email: str) -> str:
+    return hashlib.sha256(email.lower().strip().encode()).hexdigest()
+
+
+async def _suppress_email(email: str, reason: str, practice_id: str | None) -> None:
+    try:
+        db = get_db()
+        await db.email_suppression_list.update_one(
+            {"email_hash": _email_hash(email)},
+            {
+                "$set": {
+                    "reason": reason,
+                    "practice_id": practice_id,
+                    "suppressed_at": datetime.now(timezone.utc).isoformat(),
+                },
+                "$setOnInsert": {
+                    "id": str(uuid.uuid4()),
+                    "email_hash": _email_hash(email),
+                },
+            },
+            upsert=True,
+        )
+        logger.info("ses_suppression_added", extra={"reason": reason, "practice_id": practice_id})
+    except Exception as exc:
+        logger.error("ses_suppression_write_error", extra={"error": str(exc)})
+
+
 # ── Webhook endpoint ──────────────────────────────────────────────────────────
 
 @router.post("/api/webhooks/ses")
@@ -155,6 +185,8 @@ async def _handle_ses_event(inner: dict, raw_sns_payload: dict) -> None:
             "ses_bounce",
             extra={"practice_id": practice_id, "type": bounce_type, "subtype": bounce_subtype},
         )
+        if bounce_type == "Permanent" and recipient:
+            await _suppress_email(recipient, "bounce", practice_id)
 
     elif event_type == "Complaint":
         c = inner.get("complaint", {})
@@ -166,6 +198,8 @@ async def _handle_ses_event(inner: dict, raw_sns_payload: dict) -> None:
             "ses_complaint",
             extra={"practice_id": practice_id, "feedback_type": complaint_feedback_type},
         )
+        if recipient:
+            await _suppress_email(recipient, "complaint", practice_id)
 
     elif event_type == "Delivery":
         d = inner.get("delivery", {})
