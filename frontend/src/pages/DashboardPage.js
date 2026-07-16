@@ -48,8 +48,8 @@ export default function DashboardPage({ useMock = false }) {
         setRecentAppointments(aptsRes.data.slice(0, 4));
 
         const allCalls = callsRes.data || [];
-        const active = allCalls.filter(c => (c.status || c.call_status) === 'started' && !c.end_timestamp);
-        const completed = allCalls.filter(c => (c.status || c.call_status) !== 'started' || c.end_timestamp);
+        const active = allCalls.filter(c => ['active', 'started'].includes(c.status || c.call_status) && !c.end_timestamp);
+        const completed = allCalls.filter(c => !['active', 'started'].includes(c.status || c.call_status) || c.end_timestamp);
 
         setActiveCalls(active);
         setRecentCalls(completed.slice(0, 3));
