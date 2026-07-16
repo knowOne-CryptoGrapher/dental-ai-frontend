@@ -10,7 +10,7 @@ spec:
   template:
     metadata:
       annotations:
-        run.googleapis.com/secrets-last-updated: "2026-07-10-v1"
+        run.googleapis.com/secrets-last-updated: "2026-07-14-v2"
         autoscaling.knative.dev/minScale: "1"
         autoscaling.knative.dev/maxScale: "20"
         run.googleapis.com/cpu-throttling: "false"
@@ -168,7 +168,10 @@ spec:
               name: SES_FROM_NAME
               key: latest
         - name: SES_CONFIGURATION_SET
-          value: ""
+          valueFrom:
+            secretKeyRef:
+              name: SES_CONFIGURATION_SET
+              key: latest
   traffic:
   - percent: 100
     latestRevision: true
