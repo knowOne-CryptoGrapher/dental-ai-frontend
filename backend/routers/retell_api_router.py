@@ -507,7 +507,16 @@ async def lookup_patient_by_phone(
             },
             {"_id": 0}
         )
-    
+
+    logger.info(
+        "retell_lookup_patient_result",
+        extra={
+            "practice_id": practice_id,
+            "found": patient is not None,
+            "phone": mask_phone(phone_number),
+        }
+    )
+
     if not patient:
         logger.info("retell_patient_not_found", extra={"phone": mask_phone(phone_number)})
         return {
@@ -584,7 +593,10 @@ async def lookup_patient_by_phone(
             message = f"Hi {patient_name}! How can I help today?"
     else:
         # Registered but never actually visited (all past appts cancelled / no-show)
-        message = f"Hi {patient_name}! I have your file but no previous visits on record. How can I help today?"
+        if appointment_history:
+            message = f"Hi {patient_name}! I have your file here. How can I help today?"
+        else:
+            message = f"Hi {patient_name}! I have your file but no previous visits on record. How can I help today?"
     
     # Preferred provider = the provider on the caller's most recent appointment
     # (any status), if known. Useful for "book me with my usual doctor" flow.
