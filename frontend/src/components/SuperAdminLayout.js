@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  LayoutGrid, Building2, Phone, LogOut, ShieldAlert, Menu, ChevronLeft, Cpu,
+  LayoutGrid, Building2, Phone, LogOut, ShieldAlert, Menu, ChevronLeft, Cpu, ClipboardList,
 } from 'lucide-react';
 
 /**
@@ -19,6 +19,7 @@ export default function SuperAdminLayout({ children }) {
 
   const navItems = [
     { path: '/admin', label: 'Dashboard', icon: LayoutGrid, exact: true },
+    { path: '/admin/leads', label: 'Lead Approvals', icon: ClipboardList },
     { path: '/admin/practices', label: 'Manage Practices', icon: Building2 },
     { path: '/admin/retell', label: 'Retell Provisioning', icon: Phone },
     { path: '/admin/llm', label: 'LLM Routing', icon: Cpu },

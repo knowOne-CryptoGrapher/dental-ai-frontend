@@ -23,6 +23,7 @@ import SuperAdminRetellPage from "./pages/SuperAdminRetellPage";
 import SuperAdminDashboardPage from "./pages/SuperAdminDashboardPage";
 import SuperAdminPracticesPage from "./pages/SuperAdminPracticesPage";
 import SuperAdminLLMPage from "./pages/SuperAdminLLMPage";
+import SuperAdminLeadsPage from "./pages/SuperAdminLeadsPage";
 import InvitePage from "./pages/InvitePage";
 import KnowledgeBasePage from "./pages/KnowledgeBasePage";
 import RoutingRulesPage from "./pages/RoutingRulesPage";
@@ -197,6 +198,7 @@ function AppContent() {
 
       {/* Platform Console — super admins only */}
       <Route path="/admin" element={<SuperAdminPage component={SuperAdminDashboardPage} />} />
+      <Route path="/admin/leads" element={<SuperAdminPage component={SuperAdminLeadsPage} />} />
       <Route path="/admin/practices" element={<SuperAdminPage component={SuperAdminPracticesPage} />} />
       <Route path="/admin/retell" element={<SuperAdminPage component={SuperAdminRetellPage} />} />
       <Route path="/admin/llm" element={<SuperAdminPage component={SuperAdminLLMPage} />} />

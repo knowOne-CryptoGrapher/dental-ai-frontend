@@ -174,6 +174,8 @@ class SalesContactRequest(BaseModel):
     name: str
     email: EmailStr
     phone: Optional[str] = None
+    province: Optional[str] = None
+    country: Optional[str] = None
     clinic_size: str   # "1-5" | "6-15" | "16-50" | "50+"
     message: Optional[str] = None
     requested_plan: str  # "enterprise" | "elite"

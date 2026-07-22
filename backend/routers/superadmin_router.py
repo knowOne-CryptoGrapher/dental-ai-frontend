@@ -13,6 +13,7 @@ import os
 import uuid
 import logging
 import hashlib
+from typing import Optional
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, EmailStr, Field
@@ -22,6 +23,7 @@ from agent.prompt_renderer import render_amanda_prompt
 from models import default_practice_settings
 from plans import is_valid_plan_id, list_plans, get_plan, DEFAULT_PLAN_ID
 from regions.region_config import derive_region, DB_CLUSTER_LABELS
+from services.email_service import email_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/superadmin", tags=["superadmin"])
@@ -353,6 +355,160 @@ async def update_practice(
         )
 
     return {"practice_id": practice_id, **update}
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Sales lead approval queue
+# ──────────────────────────────────────────────────────────────────────
+
+@router.get("/leads")
+async def list_leads(
+    status: Optional[str] = None,
+    current_user: dict = Depends(require_role("super_admin")),
+):
+    db = get_db()
+    query = {}
+    if status:
+        query["status"] = status
+    leads = await db.sales_leads.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return {"count": len(leads), "leads": leads}
+
+
+@router.post("/leads/{lead_id}/approve")
+async def approve_lead(
+    lead_id: str,
+    current_user: dict = Depends(require_role("super_admin")),
+):
+    db = get_db()
+    lead = await db.sales_leads.find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    if lead.get("status") != "new":
+        raise HTTPException(status_code=400, detail=f"Lead is already {lead.get('status')}")
+
+    # Derive data residency. lead.province is free text from the contact form
+    # (not validated against Canadian codes) — falls back to BC/ca-west for
+    # unrecognised or non-Canadian input. No US/other-region support exists
+    # elsewhere in this codebase today.
+    try:
+        home_region = derive_region(lead.get("province") or "BC")
+    except ValueError:
+        home_region = derive_region("BC")
+
+    practice_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    practice_doc = {
+        "id": practice_id,
+        "name": lead.get("name") + " Dental",
+        "contact_email": lead.get("email"),
+        "contact_phone": lead.get("phone"),
+        "status": "onboarding",
+        "billing_status": "active",
+        "subscription_plan": lead.get("requested_plan", "professional"),
+        "default_timezone": "America/Toronto",
+        "default_retention_years": 7,
+        "settings": default_practice_settings(),
+        "created_at": now,
+        "created_by_super_admin": current_user.get("id"),
+        # Data residency — immutable after creation (mirrors create_practice above)
+        "province":       (lead.get("province") or "BC").strip().upper(),
+        "country":        lead.get("country") or "CA",
+        "home_region":    home_region.value,
+        "db_cluster":     DB_CLUSTER_LABELS[home_region],
+        "compute_region": os.getenv("COMPUTE_REGION", "northamerica-west2"),
+    }
+    await db.practices.insert_one(practice_doc)
+
+    await db.locations.insert_one({
+        "id": str(uuid.uuid4()),
+        "practice_id": practice_id,
+        "name": "Main Office",
+        "timezone": "America/Toronto",
+        "is_active": True,
+        "created_at": now,
+    })
+
+    # Send invite email to lead so they set their own password
+    try:
+        invite_token = str(uuid.uuid4())
+        expire_at = (datetime.now(timezone.utc) + timedelta(hours=72)).isoformat()
+        await db.invite_tokens.insert_one({
+            "token": invite_token,
+            "practice_id": practice_id,
+            "email": lead.get("email"),
+            "role": "admin",
+            "created_at": now,
+            "expires_at": expire_at,
+            "used": False,
+            "used_at": None,
+            "created_by": current_user.get("id"),
+        })
+        frontend_base = os.getenv("FRONTEND_BASE_URL", "https://app.frontdeskdentalai.com")
+        invite_url = f"{frontend_base}/invite/{invite_token}"
+        # send_internal_notification is documented as internal-team-only (skips
+        # the suppression list) — used here because send() requires a
+        # practice-scoped template and none exists yet for lead approval.
+        await email_service.send_internal_notification(
+            to_email=lead.get("email"),
+            subject="You're approved — set up your Dental AI account",
+            body_text=(
+                f"Hi {lead.get('name')},\n\n"
+                f"Your Dental AI account has been approved.\n\n"
+                f"Click the link below to set your password and access your dashboard:\n\n"
+                f"{invite_url}\n\n"
+                f"This link expires in 72 hours.\n\n"
+                f"Welcome aboard,\nThe Dental AI Team"
+            ),
+        )
+    except Exception as e:
+        logger.error("approve_lead_invite_error", extra={"lead_id": lead_id, "error": str(e)})
+
+    await db.sales_leads.update_one(
+        {"id": lead_id},
+        {"$set": {
+            "status": "approved",
+            "practice_id": practice_id,
+            "approved_at": now,
+            "approved_by": current_user.get("id"),
+        }},
+    )
+    return {"success": True, "practice_id": practice_id, "invite_sent_to": lead.get("email")}
+
+
+@router.post("/leads/{lead_id}/deny")
+async def deny_lead(
+    lead_id: str,
+    current_user: dict = Depends(require_role("super_admin")),
+):
+    db = get_db()
+    lead = await db.sales_leads.find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    if lead.get("status") != "new":
+        raise HTTPException(status_code=400, detail=f"Lead is already {lead.get('status')}")
+
+    try:
+        # See note above on send_internal_notification's suppression-list caveat.
+        await email_service.send_internal_notification(
+            to_email=lead.get("email"),
+            subject="Your Dental AI application",
+            body_text=(
+                f"Hi {lead.get('name')},\n\n"
+                f"Thank you for your interest in Dental AI.\n\n"
+                f"After reviewing your application, we're unable to move forward at this time. "
+                f"We appreciate you reaching out and encourage you to apply again in the future.\n\n"
+                f"Best regards,\nThe Dental AI Team"
+            ),
+        )
+    except Exception as e:
+        logger.error("deny_lead_email_error", extra={"lead_id": lead_id, "error": str(e)})
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.sales_leads.update_one(
+        {"id": lead_id},
+        {"$set": {"status": "denied", "denied_at": now, "denied_by": current_user.get("id")}}
+    )
+    return {"success": True, "denied": lead_id}
 
 
 @router.post("/practices/{practice_id}/suspend")

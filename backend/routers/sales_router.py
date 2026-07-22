@@ -36,6 +36,8 @@ async def sales_contact(body: SalesContactRequest, request: Request):
         "name":           body.name,
         "email":          body.email,
         "phone":          body.phone,
+        "province":       body.province,
+        "country":        body.country,
         "clinic_size":    body.clinic_size,
         "message":        body.message,
         "requested_plan": body.requested_plan,

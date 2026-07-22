@@ -5,7 +5,7 @@ const CLINIC_SIZE_OPTIONS = ['1-5', '6-15', '16-50', '50+'];
 
 export default function SalesLeadForm({ requestedPlan, onSuccess }) {
   const [form, setForm] = useState({
-    name: '', email: '', phone: '', clinic_size: '', message: '',
+    name: '', email: '', phone: '', province: '', country: 'Canada', clinic_size: '', message: '',
   });
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -39,6 +39,8 @@ export default function SalesLeadForm({ requestedPlan, onSuccess }) {
           name:           form.name.trim(),
           email:          form.email.trim(),
           phone:          form.phone.trim() || null,
+          province:       form.province.trim() || null,
+          country:        form.country || null,
           clinic_size:    form.clinic_size,
           message:        form.message.trim() || null,
           requested_plan: requestedPlan,
@@ -90,6 +92,20 @@ export default function SalesLeadForm({ requestedPlan, onSuccess }) {
       <Field label="Phone Number" error={null}>
         <input type="tel" value={form.phone} onChange={e => set('phone', e.target.value)}
           placeholder="+1 (604) 555-0100" className={inputCls(null)} />
+      </Field>
+
+      <Field label="Province / State" error={null}>
+        <input type="text" value={form.province} onChange={e => set('province', e.target.value)}
+          placeholder="Province / State" className={inputCls(null)} />
+      </Field>
+
+      <Field label="Country" error={null}>
+        <select value={form.country} onChange={e => set('country', e.target.value)}
+          className={selectCls}>
+          <option value="Canada">Canada</option>
+          <option value="United States">United States</option>
+          <option value="Other">Other</option>
+        </select>
       </Field>
 
       <Field label="Clinic Size" required error={errors.clinic_size}>
