@@ -137,6 +137,11 @@ spec:
             secretKeyRef:
               name: INTERNAL_API_KEY
               key: latest
+        - name: SALES_NOTIFY_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: SALES_NOTIFY_EMAIL
+              key: latest
         - name: RETELL_WEBHOOK_SECRET
           valueFrom:
             secretKeyRef:

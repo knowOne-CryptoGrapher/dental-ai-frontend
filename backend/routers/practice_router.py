@@ -11,6 +11,7 @@ from auth import (
 )
 from plans import enforce_plan_limit
 from regions.region_config import derive_region, DB_CLUSTER_LABELS, COMPUTE_REGION_LABELS
+from config import TERMS_VERSION, PRIVACY_POLICY_VERSION
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["practice"])
@@ -78,6 +79,21 @@ async def create_practice_onboarding(
             detail=f"A valid subscription plan is required. "
                    f"Must be one of: {', '.join(sorted(_VALID_PLANS))}",
         )
+
+    submitted_terms = data.accepted_terms_version or ""
+    submitted_privacy = data.accepted_privacy_version or ""
+
+    if submitted_terms != TERMS_VERSION:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Outdated terms version. Please refresh and accept the current Terms of Service (v{TERMS_VERSION})."
+        )
+    if submitted_privacy != PRIVACY_POLICY_VERSION:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Outdated privacy version. Please refresh and accept the current Privacy Policy (v{PRIVACY_POLICY_VERSION})."
+        )
+    logger.info("legal_versions_accepted", extra={"terms": submitted_terms, "privacy": submitted_privacy})
 
     try:
         home_region = derive_region(data.province)
@@ -224,9 +240,44 @@ async def complete_practice_onboarding(
         }},
     )
 
+    # Non-blocking welcome email
+    try:
+        from services.email_service import email_service
+        admin_user = await db.users.find_one(
+            {"practice_id": practice_id, "role": "admin"},
+            {"_id": 0, "email": 1, "full_name": 1}
+        )
+        if admin_user and admin_user.get("email"):
+            await email_service.send(
+                practice_id=practice_id,
+                to_email=admin_user["email"],
+                template_name="onboarding_welcome",
+                subject="Welcome to Front Desk Dental AI",
+                template_vars={
+                    "practice_name": practice.get("name", "your practice"),
+                    "admin_name": admin_user.get("full_name", ""),
+                    "dashboard_url": "https://frontdeskdentalai.com/dashboard",
+                    "support_email": "support@frontdeskdentalai.com",
+                }
+            )
+            logger.info("onboarding_welcome_email_sent", extra={"practice_id": practice_id})
+    except Exception as e:
+        logger.error("onboarding_welcome_email_failed", extra={"practice_id": practice_id, "error": str(e)})
+
+    retell_configured = bool(
+        (practice.get("settings") or {}).get("retell", {}).get("agent_id")
+    )
+    warnings = []
+    if not retell_configured:
+        warnings.append(
+            "Voice setup incomplete — your AI receptionist will not answer calls "
+            "until Retell is configured. Contact support to complete setup."
+        )
+
     return {
         "success": True,
         "onboarding_completed_at": now.isoformat(),
+        "warnings": warnings,
     }
 
 

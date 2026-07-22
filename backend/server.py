@@ -36,7 +36,8 @@ from routers.legal_router import router as legal_router
 from routers.practice_router import internal_router
 from routers.billing_router import router as billing_router
 from routers.stripe_webhook_router import router as stripe_webhook_router
-from routers.onboarding_router import router as onboarding_router
+# Deprecated (superseded by /api/auth/signup + POST /api/practices). Kept importable, not mounted.
+# from routers.onboarding_router import router as onboarding_router
 from routers.llm_router_api import router as llm_router
 
 from routers.analytics_router import router as analytics_router
@@ -307,7 +308,8 @@ app.include_router(legal_router)
 app.include_router(auth_router)
 app.include_router(billing_router)
 app.include_router(stripe_webhook_router)
-app.include_router(onboarding_router)
+# Deprecated (superseded by /api/auth/signup + POST /api/practices) — see import comment above.
+# app.include_router(onboarding_router)
 app.include_router(llm_router)
 
 app.include_router(analytics_router)
