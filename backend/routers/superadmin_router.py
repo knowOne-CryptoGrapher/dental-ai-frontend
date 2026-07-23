@@ -36,10 +36,13 @@ def _function_urls(base: str) -> dict:
         "lookup_patient":              f"{base}/api/retell/lookup-patient",
         "list_providers":              f"{base}/api/retell/list-providers",
         "check_provider_availability": f"{base}/api/retell/check-provider-availability",
-        "book_appointments":           f"{base}/api/retell/book-appointment",
+        "book_appointment":            f"{base}/api/retell/book-appointment",
         "get_patient_appointments":    f"{base}/api/retell/get-patient-appointments",
         "cancel_appointment":          f"{base}/api/retell/cancel-appointment",
         "register_patient":            f"{base}/api/retell/register-patient",
+        "get_practice_context":        f"{base}/api/retell/practice-context",
+        "query_knowledge_base":        f"{base}/api/knowledge/query",
+        "ingest_call_summary":         f"{base}/api/retell/call-summary",
     }
 
 

@@ -8,7 +8,22 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge';
 import { Textarea } from '../components/ui/textarea';
 import { toast } from 'sonner';
-import { Loader2, Copy, Check, Phone, Sparkles, RefreshCw } from 'lucide-react';
+import { Copy, Check, Phone, Sparkles, RefreshCw } from 'lucide-react';
+
+// Per-function Retell node config. Keys must match the backend's
+// _function_urls() dict in superadmin_router.py exactly.
+const FUNCTION_NODE_META = {
+  lookup_patient:              { argsOnlyOff: true },
+  list_providers:              {},
+  check_provider_availability: {},
+  book_appointment:            { argsOnlyOff: true },
+  get_patient_appointments:    { argsOnlyOff: true },
+  cancel_appointment:          { argsOnlyOff: true },
+  register_patient:            { argsOnlyOff: true },
+  get_practice_context:        { header: 'x-retell-api-key' },
+  query_knowledge_base:        { header: 'x-retell-api-key' },
+  ingest_call_summary:         { header: 'x-retell-secret' },
+};
 
 function CopyBtn({ text, label = 'Copy' }) {
   const [copied, setCopied] = useState(false);
@@ -39,7 +54,6 @@ export default function SuperAdminRetellPage() {
   const [agentId, setAgentId] = useState('');
   const [phone, setPhone] = useState('');
   const [busy, setBusy] = useState(false);
-  const [automationStatus, setAutomationStatus] = useState(null);
 
   const loadPractices = useCallback(async () => {
     setLoading(true);
@@ -58,7 +72,6 @@ export default function SuperAdminRetellPage() {
       setRetellCfg(r.data);
       setAgentId(r.data.agent_id || '');
       setPhone(r.data.phone_number || '');
-      setAutomationStatus(r.data.automation_available ? 'available' : 'manual');
     } catch (e) { toast.error('Failed to load practice Retell config'); }
   }, [axiosAuth]);
 
@@ -89,33 +102,6 @@ export default function SuperAdminRetellPage() {
       await loadPracticeRetell(selected);
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
     finally { setBusy(false); }
-  };
-
-  const provision = async () => {
-    if (!selected) return;
-    setBusy(true);
-    try {
-      await axiosAuth().post(`/superadmin/practices/${selected}/retell/provision`);
-      toast.success('Agent provisioned');
-      await loadPracticeRetell(selected);
-    } catch (e) {
-      const detail = e.response?.data?.detail || 'Provision failed';
-      if (e.response?.status === 501) toast.warning(detail, { duration: 6000 });
-      else toast.error(detail);
-    } finally { setBusy(false); }
-  };
-
-  const resync = async () => {
-    if (!selected) return;
-    setBusy(true);
-    try {
-      await axiosAuth().post(`/superadmin/practices/${selected}/retell/resync`);
-      toast.success('Re-synced');
-    } catch (e) {
-      const detail = e.response?.data?.detail || 'Re-sync failed';
-      if (e.response?.status === 501) toast.warning(detail, { duration: 6000 });
-      else toast.error(detail);
-    } finally { setBusy(false); }
   };
 
   const cardCls = "bg-slate-900 border-slate-800 text-slate-100";
@@ -194,42 +180,50 @@ export default function SuperAdminRetellPage() {
             <>
               <Card className={cardCls}>
                 <CardHeader className="border-b border-slate-800">
+                  <CardTitle className="text-base text-slate-100">How to Provision a New Practice</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-4 text-sm">
+                  <div>
+                    <p className="font-semibold text-amber-300">Step 1 — Copy the system prompt</p>
+                    <p className="text-slate-400 mt-0.5">Click "Copy prompt" below and paste it into the Retell Dashboard when creating the agent.</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-amber-300">Step 2 — Create the agent in Retell</p>
+                    <p className="text-slate-400 mt-0.5">Go to Retell Dashboard → Agents → Create Agent → Single Prompt Agent. Paste the copied prompt. Set the voice to your preferred option.</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-amber-300">Step 3 — Add the 10 function nodes</p>
+                    <p className="text-slate-400 mt-0.5">
+                      In the agent's Functions tab, add each function listed below using the URLs shown.
+                      Set "Payload: args only" ON for every function except the ones marked "Args Only OFF" in the list below.
+                      Add the custom header shown next to a function, where one is listed.
+                    </p>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-amber-300">Step 4 — Set the webhook URL</p>
+                    <p className="text-slate-400 mt-0.5">Go to Retell Dashboard → Settings → Webhooks. Paste the webhook URL shown below.</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-amber-300">Step 5 — Save the agent ID here</p>
+                    <p className="text-slate-400 mt-0.5">Copy the Agent ID from Retell Dashboard → Agents → your agent → ID. Paste it into the Agent ID field below and click Save.</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-amber-300">Step 6 — Test</p>
+                    <p className="text-slate-400 mt-0.5">Make a test call to verify the agent responds correctly. Check the Call Logs page in the practice dashboard after the call.</p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className={cardCls}>
+                <CardHeader className="border-b border-slate-800">
                   <div className="flex items-start justify-between">
                     <div>
                       <CardTitle className="text-slate-100">{retellCfg.practice_name}</CardTitle>
                       <p className="text-xs text-slate-500 mt-1">practice_id: <code className="text-amber-300">{retellCfg.practice_id}</code></p>
                     </div>
-                    {automationStatus === 'available'
-                      ? <Badge className="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/15">Automation ready</Badge>
-                      : <Badge className="bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/15">Manual mode</Badge>}
+                    <Badge className="bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/15">Manual setup required</Badge>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-3 pt-4">
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      data-testid="provision-btn"
-                      onClick={provision}
-                      disabled={busy}
-                      className="bg-gradient-to-r from-red-500 to-amber-500 hover:from-red-400 hover:to-amber-400 text-white border-0"
-                    >
-                      {busy && <Loader2 className="w-4 h-4 mr-1 animate-spin" />} Provision Agent
-                    </Button>
-                    <Button
-                      data-testid="resync-btn"
-                      onClick={resync}
-                      disabled={busy}
-                      variant="outline"
-                      className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 hover:text-white"
-                    >
-                      <RefreshCw className="w-4 h-4 mr-1" /> Re-sync prompt + functions
-                    </Button>
-                  </div>
-                  {automationStatus === 'manual' && (
-                    <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 p-2.5 rounded-lg">
-                      Automation requires <code className="px-1 py-0.5 bg-slate-800 rounded">RETELL_API_KEY</code> in backend env. Use the manual setup section below until it's configured.
-                    </p>
-                  )}
-                </CardContent>
               </Card>
 
               <Card className={cardCls}>
@@ -239,12 +233,12 @@ export default function SuperAdminRetellPage() {
                 <CardContent className="space-y-3 pt-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <Label className="text-slate-300">Agent ID</Label>
-                      <Input data-testid="agent-id-input" value={agentId} onChange={e => setAgentId(e.target.value)} placeholder="agent_xxxx" className={inputCls} />
+                      <Label className="text-slate-300">Retell Agent ID (from Retell Dashboard → Agents → your agent → ID)</Label>
+                      <Input data-testid="agent-id-input" value={agentId} onChange={e => setAgentId(e.target.value)} placeholder="agent_xxxxxxxxxxxxxxxxxxxxxxxx" className={inputCls} />
                     </div>
                     <div>
-                      <Label className="text-slate-300">Phone number</Label>
-                      <Input data-testid="phone-input" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+15551112222" className={inputCls} />
+                      <Label className="text-slate-300">Assigned phone number (E.164 format)</Label>
+                      <Input data-testid="phone-input" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+16041234567" className={inputCls} />
                     </div>
                   </div>
                   <Button
@@ -273,12 +267,27 @@ export default function SuperAdminRetellPage() {
                   <div>
                     <Label className="text-slate-300">Function URLs</Label>
                     <div className="space-y-1.5 mt-1">
-                      {Object.entries(retellCfg.function_urls).map(([name, url]) => (
-                        <div key={name} className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs">
-                          <code className="flex-1 truncate text-slate-300"><strong className="text-amber-300">{name}</strong> → {url}</code>
-                          <CopyBtn text={url} label="" />
-                        </div>
-                      ))}
+                      {Object.entries(retellCfg.function_urls).map(([name, url]) => {
+                        const meta = FUNCTION_NODE_META[name] || {};
+                        return (
+                          <div key={name} className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs space-y-1">
+                            <div className="flex items-center gap-2">
+                              <code className="flex-1 truncate text-slate-300"><strong className="text-amber-300">{name}</strong> → {url}</code>
+                              <CopyBtn text={url} label="" />
+                            </div>
+                            {(meta.header || meta.argsOnlyOff) && (
+                              <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
+                                {meta.header && (
+                                  <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">Header: <code className="text-amber-300">{meta.header}</code></span>
+                                )}
+                                {meta.argsOnlyOff && (
+                                  <span className="px-1.5 py-0.5 rounded bg-red-500/10 text-red-300 border border-red-500/20">Payload: Args Only OFF</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 
