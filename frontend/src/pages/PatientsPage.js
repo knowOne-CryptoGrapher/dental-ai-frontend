@@ -11,6 +11,7 @@ import {
   User, ChevronDown, X, Loader2, AlertCircle
 } from 'lucide-react';
 import { api } from '../config/api';
+import { toast } from 'sonner';
 import { mockPatients } from '../data/mockData';
 
 export default function PatientsPage({ useMock = false }) {
@@ -96,6 +97,20 @@ export default function PatientsPage({ useMock = false }) {
       setDetailPatient(null);
     } catch (err) {
       console.error('Delete failed:', err);
+    }
+  };
+
+  const handleMarkConsent = async (patientId) => {
+    try {
+      if (useMock) {
+        setPatients(prev => prev.map(p => p.id === patientId ? { ...p, consent_given: true } : p));
+      } else {
+        await api.patch(`/patients/${patientId}/consent`);
+        await fetchPatients();
+      }
+      toast.success('Consent marked as given');
+    } catch (err) {
+      toast.error('Failed to mark consent');
     }
   };
 
@@ -192,16 +207,28 @@ export default function PatientsPage({ useMock = false }) {
                   <div className="col-span-2 text-sm text-gray-600">{patient.phone}</div>
                   <div className="col-span-2 text-sm text-gray-600 truncate">{patient.email || '—'}</div>
                   <div className="col-span-2">
-                    <Badge
-                      variant="outline"
-                      className={
-                        patient.consent_given
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                          : 'border-amber-200 bg-amber-50 text-amber-700'
-                      }
-                    >
-                      {patient.consent_given ? 'Given' : 'Pending'}
-                    </Badge>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <Badge
+                        variant="outline"
+                        className={
+                          patient.consent_given
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                            : 'border-amber-200 bg-amber-50 text-amber-700'
+                        }
+                      >
+                        {patient.consent_given ? 'Given' : 'Pending'}
+                      </Badge>
+                      {!patient.consent_given && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                          onClick={(e) => { e.stopPropagation(); handleMarkConsent(patient.id); }}
+                        >
+                          Mark Consent
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <div
                     className="col-span-2 flex items-center justify-end gap-1"

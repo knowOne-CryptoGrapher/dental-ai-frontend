@@ -72,6 +72,37 @@ async def create_patient(patient: PatientCreate, current_user: dict = Depends(ge
     return doc
 
 
+@router.patch("/patients/{patient_id}/consent")
+async def mark_consent_given(
+    patient_id: str,
+    current_user: dict = Depends(require_role("admin", "staff")),
+    request: Request = None,
+):
+    db = get_db()
+    practice_id = current_user.get("practice_id")
+    patient = await db.patients.find_one(
+        {"id": patient_id, "practice_id": practice_id},
+        {"_id": 0, "id": 1, "name": 1}
+    )
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    await db.patients.update_one(
+        {"id": patient_id},
+        {"$set": {
+            "consent_given": True,
+            "consent_date": datetime.now(timezone.utc).isoformat(),
+            "consent_method": "staff_verified",
+        }}
+    )
+    ip = request.client.host if request else None
+    await log_audit_event(
+        current_user["id"], practice_id, "patient_consent_given",
+        "patient", patient_id, {"name": patient.get("name")}, ip
+    )
+    return {"success": True, "patient_id": patient_id, "consent_given": True}
+
+
 @router.put("/patients/{patient_id}")
 async def update_patient(patient_id: str, patient: PatientCreate, current_user: dict = Depends(get_current_user)):
     db = get_db()
