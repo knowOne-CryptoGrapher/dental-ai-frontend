@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Navigate } from 'react-router-dom';
 import {
   Check,
   Copy,
@@ -94,6 +94,9 @@ const WIZARD_PLANS = [
     limits: ['10,000 calls/mo', '200 providers', '100 locations'],
   },
 ];
+
+const CONTACT_SALES_PLANS = ['enterprise', 'elite'];
+const requiresContactSales = (planId) => CONTACT_SALES_PLANS.includes(planId);
 
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const DAY_LABELS = {
@@ -531,6 +534,13 @@ export default function OnboardingWizard({ mode = 'signup' }) {
 
   const selectedPlanData = WIZARD_PLANS.find((p) => p.id === selectedPlan);
 
+  // ?plan=enterprise / ?plan=elite should never reach the wizard — bounce
+  // straight to Contact Sales before anything renders.
+  const urlPlan = searchParams.get('plan');
+  if (requiresContactSales(urlPlan)) {
+    return <Navigate to={`/contact-sales?plan=${urlPlan}`} replace />;
+  }
+
   return (
     <div className="p-6">
       {/* Step Navigation */}
@@ -639,7 +649,8 @@ export default function OnboardingWizard({ mode = 'signup' }) {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {WIZARD_PLANS.map((plan) => {
-                const isSelected = selectedPlan === plan.id;
+                const salesGated = requiresContactSales(plan.id);
+                const isSelected = !salesGated && selectedPlan === plan.id;
                 return (
                   <div
                     key={plan.id}
@@ -652,7 +663,13 @@ export default function OnboardingWizard({ mode = 'signup' }) {
                         : 'border border-slate-200 bg-white hover:border-slate-300',
                     ].join(' ')}
                     style={isSelected && plan.isElite ? { border: '2px solid #D4AF37' } : {}}
-                    onClick={() => setSelectedPlan(plan.id)}
+                    onClick={() => {
+                      if (salesGated) {
+                        navigate(`/contact-sales?plan=${plan.id}`);
+                      } else {
+                        setSelectedPlan(plan.id);
+                      }
+                    }}
                   >
                     {plan.badge && (
                       <span
@@ -679,7 +696,11 @@ export default function OnboardingWizard({ mode = 'signup' }) {
                           <span className="text-xs text-slate-500">/mo</span>
                         </div>
                       </div>
-                      {isSelected && (
+                      {salesGated ? (
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 border border-slate-300 rounded-full px-2 py-1 shrink-0">
+                          Contact Sales
+                        </span>
+                      ) : isSelected && (
                         <span
                           className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5"
                           style={plan.isElite ? { backgroundColor: '#D4AF37' } : { backgroundColor: '#0d9488' }}

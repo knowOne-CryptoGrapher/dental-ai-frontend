@@ -443,7 +443,7 @@ async def approve_lead(
             "used_at": None,
             "created_by": current_user.get("id"),
         })
-        frontend_base = os.getenv("FRONTEND_BASE_URL", "https://app.frontdeskdentalai.com")
+        frontend_base = os.getenv("FRONTEND_BASE_URL", "https://frontdeskdentalai.com")
         invite_url = f"{frontend_base}/invite/{invite_token}"
         # send_internal_notification is documented as internal-team-only (skips
         # the suppression list) — used here because send() requires a

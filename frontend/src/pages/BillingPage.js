@@ -12,6 +12,10 @@ import {
   Brain, ArrowRight, LayoutGrid, X, Users,
 } from 'lucide-react';
 import ComparePlansModal from '../components/ComparePlansModal';
+import ContactSalesModal from '../components/sales/ContactSalesModal';
+
+const CONTACT_SALES_PLANS = ['enterprise', 'elite'];
+const requiresContactSales = (planId) => CONTACT_SALES_PLANS.includes(planId);
 
 const POLL_INTERVAL_MS = 2000;
 const POLL_MAX_ATTEMPTS = 12;
@@ -82,6 +86,7 @@ export default function BillingPage() {
   const [baaLoading, setBaaLoading] = useState(false);
   const [baaError, setBaaError] = useState('');
   const [comparePlansOpen, setComparePlansOpen] = useState(false);
+  const [salesModal, setSalesModal] = useState({ open: false, plan: 'enterprise' });
   const [usageStats, setUsageStats] = useState(null);
   const [usageBannerDismissed, setUsageBannerDismissed] = useState(false);
 
@@ -160,6 +165,10 @@ export default function BillingPage() {
 
   // ── Actions ─────────────────────────────────────────────────────────
   const subscribe = async (planId) => {
+    if (requiresContactSales(planId)) {
+      setSalesModal({ open: true, plan: planId });
+      return;
+    }
     setBusyPlan(planId);
     try {
       const api = axiosAuth();
@@ -564,6 +573,8 @@ export default function BillingPage() {
                     >
                       {busyPlan === plan.id
                         ? <Loader2 className="w-4 h-4 animate-spin" />
+                        : requiresContactSales(plan.id)
+                        ? <>Contact Sales</>
                         : <><CreditCard className="w-3.5 h-3.5 mr-1.5" /> Subscribe</>}
                     </Button>
                   )}
@@ -646,6 +657,12 @@ export default function BillingPage() {
         isOpen={comparePlansOpen}
         onClose={() => setComparePlansOpen(false)}
         currentPlan={usage?.plan}
+      />
+
+      <ContactSalesModal
+        isOpen={salesModal.open}
+        onClose={() => setSalesModal(m => ({ ...m, open: false }))}
+        requestedPlan={salesModal.plan}
       />
 
       {/* Invoices */}
