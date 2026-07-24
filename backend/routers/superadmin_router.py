@@ -49,7 +49,7 @@ def _function_urls(base: str) -> dict:
 def _backend_base() -> str:
     return os.environ.get(
         "PUBLIC_BACKEND_URL",
-        "https://tooth-reception.preview.emergentagent.com",
+        "https://dental-ai-backend-cszmxu7emq-uw.a.run.app",
     )
 
 

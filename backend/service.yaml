@@ -177,6 +177,8 @@ spec:
             secretKeyRef:
               name: SES_CONFIGURATION_SET
               key: latest
+        - name: PUBLIC_BACKEND_URL
+          value: https://dental-ai-backend-cszmxu7emq-uw.a.run.app
   traffic:
   - percent: 100
     latestRevision: true
