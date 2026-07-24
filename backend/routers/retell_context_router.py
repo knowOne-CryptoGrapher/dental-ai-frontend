@@ -362,7 +362,7 @@ async def ingest_call_summary(
                     _call_log = await db.call_logs.find_one(
                         {"call_id": body.call_id}, {"_id": 0, "patient_phone": 1}
                     )
-                    _frontend_url = os.getenv("FRONTEND_URL", "https://app.dentalai.ca")
+                    _frontend_url = os.getenv("FRONTEND_URL", "https://frontdeskdentalai.com")
                     _excerpt = (body.transcript or "")[:500].strip()
                     _practice_name = (_practice or {}).get("name", "Your Practice")
                     await email_service.send_admin_notification(

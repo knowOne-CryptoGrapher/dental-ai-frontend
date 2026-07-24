@@ -248,7 +248,7 @@ async def _sync_subscription_state(db, event_type: str, obj: dict):
       # Non-blocking admin billing notifications
       if _practice_snap:
         try:
-          _frontend_url = os.getenv("FRONTEND_URL", "https://app.dentalai.ca")
+          _frontend_url = os.getenv("FRONTEND_URL", "https://frontdeskdentalai.com")
           _admin_email = (_practice_snap.get("settings") or {}).get("admin_email")
           _notif = (_practice_snap.get("settings") or {}).get("email_notifications") or {}
           _practice_name = _practice_snap.get("name", "Your Practice")

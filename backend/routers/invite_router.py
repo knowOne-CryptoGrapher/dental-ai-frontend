@@ -25,7 +25,7 @@ router = APIRouter(prefix="/api", tags=["invites"])
 
 _ALLOWED_ROLES = {"staff", "provider", "auditor"}
 _INVITE_EXPIRY_HOURS = 24
-_FRONTEND_BASE = os.getenv("FRONTEND_BASE_URL", "https://app.frontdeskdentalai.com")
+_FRONTEND_BASE = os.getenv("FRONTEND_BASE_URL", "https://frontdeskdentalai.com")
 
 
 def _ensure_practice_access(current_user: dict, practice_id: str) -> None:
