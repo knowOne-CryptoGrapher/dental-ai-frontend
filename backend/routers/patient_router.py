@@ -3,8 +3,11 @@ import uuid
 from datetime import datetime, timezone
 import logging
 
+from pymongo.errors import DuplicateKeyError
+
 from models import PatientCreate
 from auth import get_db, get_current_user, require_role, log_audit_event, generate_file_number
+from utils.phone import normalize_phone
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["patients"])
@@ -61,9 +64,16 @@ async def create_patient(patient: PatientCreate, current_user: dict = Depends(ge
         "file_number": file_number,
         **patient.model_dump(),
         "consent_given": False,
+        "normalized_phone": normalize_phone(patient.phone),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    await db.patients.insert_one(doc)
+    try:
+        await db.patients.insert_one(doc)
+    except DuplicateKeyError:
+        raise HTTPException(status_code=409, detail={
+            "message": "Patient with this phone number already exists",
+            "patient": {"id": doc["id"], "name": patient.name}
+        })
 
     ip = request.client.host if request else None
     await log_audit_event(current_user["id"], practice_id, "patient_created", "patient", doc["id"],
@@ -107,6 +117,7 @@ async def mark_consent_given(
 async def update_patient(patient_id: str, patient: PatientCreate, current_user: dict = Depends(get_current_user)):
     db = get_db()
     update = patient.model_dump(exclude_unset=True)
+    update["normalized_phone"] = normalize_phone(patient.phone)
     result = await db.patients.update_one(
         {"id": patient_id, "practice_id": current_user.get("practice_id")},
         {"$set": update}
