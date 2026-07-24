@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 from pymongo import MongoClient
 
 load_dotenv("/app/backend/.env")
-API_URL = "https://tooth-reception.preview.emergentagent.com"
+API_URL = os.environ.get("TEST_API_URL", "https://dental-ai-backend-cszmxu7emq-uw.a.run.app").rstrip("/")
 
 MONGO = MongoClient(os.environ["MONGO_URL"])
 DB = MONGO[os.environ["DB_NAME"]]

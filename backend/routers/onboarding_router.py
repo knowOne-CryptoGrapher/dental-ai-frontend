@@ -37,7 +37,7 @@ def _backend_base(request_url: str) -> str:
         return f"{p.scheme}://{p.netloc}"
 
     # Last-resort fallback for local dev
-    return "http://localhost:8000"
+    return "https://dental-ai-backend-cszmxu7emq-uw.a.run.app"
 
 
 def _function_urls(base: str) -> dict:

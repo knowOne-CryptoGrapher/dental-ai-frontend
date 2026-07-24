@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 load_dotenv("/app/backend/.env")
 
 # Hit the public preview URL so this mirrors the real Retell path exactly.
-API_URL = "https://tooth-reception.preview.emergentagent.com"
+API_URL = os.environ.get("TEST_API_URL", "https://dental-ai-backend-cszmxu7emq-uw.a.run.app").rstrip("/")
 PRACTICE_ID = "c50330bb-079b-4286-ac62-717a40bfa8dd"
 
 # A phone that's known to exist in this env (Darnell John)
