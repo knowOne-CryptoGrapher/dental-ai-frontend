@@ -118,10 +118,16 @@ async def update_patient(patient_id: str, patient: PatientCreate, current_user: 
     db = get_db()
     update = patient.model_dump(exclude_unset=True)
     update["normalized_phone"] = normalize_phone(patient.phone)
-    result = await db.patients.update_one(
-        {"id": patient_id, "practice_id": current_user.get("practice_id")},
-        {"$set": update}
-    )
+    try:
+        result = await db.patients.update_one(
+            {"id": patient_id, "practice_id": current_user.get("practice_id")},
+            {"$set": update}
+        )
+    except DuplicateKeyError:
+        raise HTTPException(status_code=409, detail={
+            "message": "Patient with this phone number already exists",
+            "patient": {"id": patient_id, "name": patient.name}
+        })
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Patient not found")
     return await db.patients.find_one({"id": patient_id}, {"_id": 0})
