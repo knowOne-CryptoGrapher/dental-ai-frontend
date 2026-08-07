@@ -51,7 +51,7 @@ def _require_stripe():
 @router.get("/plans")
 async def get_plans():
   """Public — anyone can see what plans exist (used on the Billing page)."""
-  return [p.public_dict() for p in list_plans()]
+  return [p.public_dict() for p in list_plans() if p.public]
 
 
 @router.get("/features")

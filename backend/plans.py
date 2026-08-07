@@ -40,6 +40,7 @@ class PlanFeatures:
     calendar: bool = True
     analytics: bool = False
     insurance: bool = False
+    insurance_preview: bool = False
     audit_log: bool = False
     multi_location: bool = False
     custom_voice: bool = False
@@ -70,6 +71,7 @@ class Plan:
     features: PlanFeatures
     llm: PlanLLM
     sort_order: int = 0
+    public: bool = True
 
     @property
     def stripe_price_id(self) -> str:
@@ -177,6 +179,15 @@ PLANS: dict[str, Plan] = {
             dedicated_support=True, baa_available=True, custom_model_selection=True,
         ),
         llm=_ELITE_LLM,
+    ),
+    "founding_clinic": Plan(
+        id="founding_clinic", name="Founding Clinic", price_usd=299.0, sort_order=99,
+        public=False,
+        description="Founding Clinic Program — locked-in early-adopter rate.",
+        stripe_price_id_env="STRIPE_PRICE_FOUNDING_CLINIC",
+        limits=PlanLimits(calls_per_month=250, providers_max=5, locations_max=1, users_max=5),
+        features=PlanFeatures(audit_log=True, insurance_preview=True),
+        llm=_BASIC_LLM,
     ),
 }
 

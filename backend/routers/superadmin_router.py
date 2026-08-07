@@ -541,12 +541,89 @@ async def approve_founding_clinic(
     if app_doc.get("status") != "pending":
         raise HTTPException(status_code=400, detail=f"Application is already {app_doc.get('status')}")
 
+    # Derive data residency. Founding Clinic program is BC-only by design
+    # (no country/province selector on the application form) — mirrors
+    # approve_lead's defensive fallback above.
+    try:
+        home_region = derive_region(app_doc.get("province") or "BC")
+    except ValueError:
+        home_region = derive_region("BC")
+
+    practice_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
+    practice_doc = {
+        "id": practice_id,
+        "name": app_doc.get("clinic_name"),
+        "contact_email": app_doc.get("email"),
+        "contact_phone": app_doc.get("phone"),
+        "status": "onboarding",
+        "billing_status": "active",
+        "subscription_plan": "founding_clinic",
+        "default_timezone": "America/Toronto",
+        "default_retention_years": 7,
+        "settings": default_practice_settings(),
+        "created_at": now,
+        "created_by_super_admin": current_user.get("id"),
+        # Data residency — immutable after creation (mirrors approve_lead above)
+        "province":       (app_doc.get("province") or "BC").strip().upper(),
+        "country":        "CA",
+        "home_region":    home_region.value,
+        "db_cluster":     DB_CLUSTER_LABELS[home_region],
+        "compute_region": os.getenv("COMPUTE_REGION", "northamerica-west2"),
+    }
+    await db.practices.insert_one(practice_doc)
+
+    await db.locations.insert_one({
+        "id": str(uuid.uuid4()),
+        "practice_id": practice_id,
+        "name": "Main Office",
+        "timezone": "America/Toronto",
+        "is_active": True,
+        "created_at": now,
+    })
+
+    # Send invite email so the applicant sets their own password
+    try:
+        invite_token = str(uuid.uuid4())
+        expire_at = (datetime.now(timezone.utc) + timedelta(hours=72)).isoformat()
+        await db.invite_tokens.insert_one({
+            "token": invite_token,
+            "practice_id": practice_id,
+            "email": app_doc.get("email"),
+            "role": "admin",
+            "created_at": now,
+            "expires_at": expire_at,
+            "used": False,
+            "used_at": None,
+            "created_by": current_user.get("id"),
+        })
+        frontend_base = os.getenv("FRONTEND_BASE_URL", "https://frontdeskdentalai.com")
+        invite_url = f"{frontend_base}/invite/{invite_token}"
+        await email_service.send_internal_notification(
+            to_email=app_doc.get("email"),
+            subject="You're approved — welcome to the Founding Clinic Program",
+            body_text=(
+                f"Hi {app_doc.get('name')},\n\n"
+                f"Congratulations — {app_doc.get('clinic_name')} has been approved as a Founding Clinic.\n\n"
+                f"Click the link below to set your password and access your dashboard:\n\n"
+                f"{invite_url}\n\n"
+                f"This link expires in 72 hours.\n\n"
+                f"Welcome aboard,\nThe Dental AI Team"
+            ),
+        )
+    except Exception as e:
+        logger.error("approve_founding_clinic_invite_error", extra={"application_id": application_id, "error": str(e)})
+
     await db.founding_clinic_applications.update_one(
         {"id": application_id},
-        {"$set": {"status": "approved", "approved_at": now, "approved_by": current_user.get("id")}}
+        {"$set": {
+            "status": "approved",
+            "practice_id": practice_id,
+            "approved_at": now,
+            "approved_by": current_user.get("id"),
+        }},
     )
-    return {"success": True, "application_id": application_id, "status": "approved"}
+    return {"success": True, "practice_id": practice_id, "invite_sent_to": app_doc.get("email")}
 
 
 @router.post("/founding-clinics/{application_id}/reject")
