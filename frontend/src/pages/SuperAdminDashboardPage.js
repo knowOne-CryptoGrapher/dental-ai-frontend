@@ -39,6 +39,9 @@ export default function SuperAdminDashboardPage() {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [founding, setFounding] = useState([]);
+  const [foundingLoading, setFoundingLoading] = useState(true);
+  const [foundingBusyId, setFoundingBusyId] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -52,6 +55,32 @@ export default function SuperAdminDashboardPage() {
       }
     })();
   }, [axiosAuth]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await axiosAuth().get('/superadmin/founding-clinics');
+        setFounding(r.data.applications || []);
+      } catch (e) {
+        toast.error(e.response?.data?.detail || 'Failed to load founding clinic applications');
+      } finally {
+        setFoundingLoading(false);
+      }
+    })();
+  }, [axiosAuth]);
+
+  const handleFoundingAction = async (id, action) => {
+    setFoundingBusyId(id);
+    try {
+      await axiosAuth().post(`/superadmin/founding-clinics/${id}/${action}`);
+      toast.success(action === 'approve' ? 'Application approved' : 'Application rejected');
+      setFounding(prev => prev.map(f => f.id === id ? { ...f, status: action === 'approve' ? 'approved' : 'rejected' } : f));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Action failed');
+    } finally {
+      setFoundingBusyId(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -228,6 +257,54 @@ export default function SuperAdminDashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="bg-slate-900 border-slate-800 mt-4" data-testid="founding-clinics-card">
+        <CardHeader className="border-b border-slate-800">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-slate-100 text-base flex items-center gap-2">
+              🦷 Founding Clinic Applications
+            </CardTitle>
+            <Badge className="bg-teal-500/15 text-teal-300 border border-teal-500/30 hover:bg-teal-500/15 tabular-nums">
+              {founding.filter(f => f.status === 'pending').length} pending
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {foundingLoading ? (
+            <div className="p-8 flex justify-center">
+              <Loader2 className="w-5 h-5 text-amber-400 animate-spin" />
+            </div>
+          ) : founding.filter(f => f.status === 'pending').length === 0 ? (
+            <p className="p-8 text-sm text-slate-500 text-center">No pending applications.</p>
+          ) : (
+            <div className="divide-y divide-slate-800">
+              {founding.filter(f => f.status === 'pending').map(f => (
+                <div key={f.id} className="px-5 py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-100 truncate">{f.clinic_name}</p>
+                    <p className="text-[11px] text-slate-500 truncate">{f.name} · {f.email} · {f.province}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      size="sm"
+                      disabled={foundingBusyId === f.id}
+                      onClick={() => handleFoundingAction(f.id, 'approve')}
+                      className="bg-teal-500/20 text-teal-200 hover:bg-teal-500/30 border border-teal-500/40"
+                    >Approve</Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={foundingBusyId === f.id}
+                      onClick={() => handleFoundingAction(f.id, 'reject')}
+                      className="border-red-500/40 text-red-300 bg-red-500/5 hover:bg-red-500/15"
+                    >Reject</Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

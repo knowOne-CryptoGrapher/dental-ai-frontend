@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, X, CreditCard, RefreshCw, Shield } from 'lucide-react';
 import {
@@ -7,6 +7,9 @@ import {
 import LandingNavbar from '../components/landing/LandingNavbar';
 import LandingFooter from '../components/landing/LandingFooter';
 import ContactSalesModal from '../components/sales/ContactSalesModal';
+import FoundingClinicBanner from '../components/sales/FoundingClinicBanner';
+import FoundingClinicModal from '../components/sales/FoundingClinicModal';
+import { API_BASE_URL } from '../config/api';
 
 // ── Plan data (source: plans.py) ──────────────────────────────────────────────
 
@@ -167,9 +170,10 @@ function Cell({ value, isEliteCol }) {
   );
 }
 
-function PlanCard({ plan, onCtaClick }) {
+function PlanCard({ plan, onCtaClick, onFoundingClick, foundingSpotsRemaining }) {
   const fKey = PLAN_FEATURE_KEY[plan.id];
   const useAnchor = plan.ctaHref?.startsWith('mailto:') || plan.ctaHref?.startsWith('/contact-sales');
+  const isBasic = plan.id === 'basic';
 
   const cardBorder = plan.isElite
     ? {}
@@ -258,6 +262,25 @@ function PlanCard({ plan, onCtaClick }) {
           {plan.ctaLabel}
         </Link>
       )}
+
+      {isBasic && onFoundingClick && (
+        <>
+          {foundingSpotsRemaining !== null && (
+            <div className="text-xs text-teal-600 font-medium mt-2 text-center">
+              🦷 Founding Clinic rate: $299/mo — {foundingSpotsRemaining > 0
+                ? `${foundingSpotsRemaining} spot${foundingSpotsRemaining === 1 ? '' : 's'} left`
+                : 'waitlist open'}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={onFoundingClick}
+            className="block w-full text-center py-2 px-4 rounded-md text-xs font-semibold border border-teal-300 text-teal-700 hover:bg-teal-50 transition-colors mt-2"
+          >
+            Apply for Founding Clinic rate
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -266,9 +289,21 @@ function PlanCard({ plan, onCtaClick }) {
 
 export default function PricingPage() {
   const [salesModal, setSalesModal] = useState({ open: false, plan: 'enterprise' });
+  const [foundingModalOpen, setFoundingModalOpen] = useState(false);
+  const [foundingSpots, setFoundingSpots] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_BASE_URL}/api/sales/founding-clinic-count`)
+      .then(res => res.json())
+      .then(data => { if (!cancelled) setFoundingSpots(data.spots_remaining); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   return (
     <div className="min-h-screen bg-white">
+      <FoundingClinicBanner />
       <LandingNavbar />
 
       {/* HERO */}
@@ -310,6 +345,8 @@ export default function PricingPage() {
                     ? () => setSalesModal({ open: true, plan: plan.id })
                     : undefined
                 }
+                onFoundingClick={plan.id === 'basic' ? () => setFoundingModalOpen(true) : undefined}
+                foundingSpotsRemaining={plan.id === 'basic' ? foundingSpots : null}
               />
             ))}
           </div>
@@ -439,6 +476,11 @@ export default function PricingPage() {
         isOpen={salesModal.open}
         onClose={() => setSalesModal(m => ({ ...m, open: false }))}
         requestedPlan={salesModal.plan}
+      />
+
+      <FoundingClinicModal
+        isOpen={foundingModalOpen}
+        onClose={() => setFoundingModalOpen(false)}
       />
 
       <LandingFooter />

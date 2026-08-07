@@ -514,6 +514,61 @@ async def deny_lead(
     return {"success": True, "denied": lead_id}
 
 
+# ──────────────────────────────────────────────────────────────────────
+# Founding Clinic applications
+# ──────────────────────────────────────────────────────────────────────
+
+@router.get("/founding-clinics")
+async def list_founding_clinics(
+    current_user: dict = Depends(require_role("super_admin")),
+):
+    db = get_db()
+    applications = await db.founding_clinic_applications.find(
+        {}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return {"count": len(applications), "applications": applications}
+
+
+@router.post("/founding-clinics/{application_id}/approve")
+async def approve_founding_clinic(
+    application_id: str,
+    current_user: dict = Depends(require_role("super_admin")),
+):
+    db = get_db()
+    app_doc = await db.founding_clinic_applications.find_one({"id": application_id}, {"_id": 0})
+    if not app_doc:
+        raise HTTPException(status_code=404, detail="Application not found")
+    if app_doc.get("status") != "pending":
+        raise HTTPException(status_code=400, detail=f"Application is already {app_doc.get('status')}")
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.founding_clinic_applications.update_one(
+        {"id": application_id},
+        {"$set": {"status": "approved", "approved_at": now, "approved_by": current_user.get("id")}}
+    )
+    return {"success": True, "application_id": application_id, "status": "approved"}
+
+
+@router.post("/founding-clinics/{application_id}/reject")
+async def reject_founding_clinic(
+    application_id: str,
+    current_user: dict = Depends(require_role("super_admin")),
+):
+    db = get_db()
+    app_doc = await db.founding_clinic_applications.find_one({"id": application_id}, {"_id": 0})
+    if not app_doc:
+        raise HTTPException(status_code=404, detail="Application not found")
+    if app_doc.get("status") != "pending":
+        raise HTTPException(status_code=400, detail=f"Application is already {app_doc.get('status')}")
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.founding_clinic_applications.update_one(
+        {"id": application_id},
+        {"$set": {"status": "rejected", "rejected_at": now, "rejected_by": current_user.get("id")}}
+    )
+    return {"success": True, "application_id": application_id, "status": "rejected"}
+
+
 @router.post("/practices/{practice_id}/suspend")
 async def suspend_practice(
     practice_id: str,
