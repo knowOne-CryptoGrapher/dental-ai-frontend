@@ -1,7 +1,7 @@
 # Dental AI — Living Handoff Document
 **Last updated:** 2026-08-07
-**Backend revision:** dental-ai-backend-00077-97s
-**Frontend commit:** 2de0bbde
+**Backend revision:** dental-ai-backend-00077-97s (unchanged — `update_patient` fix committed but not yet deployed, per explicit instruction to hold deploy)
+**Frontend commit:** 4e273090
 **Branch:** unlocked-main
 **Backend URL:** https://dental-ai-backend-cszmxu7emq-uw.a.run.app
 **Frontend URL:** https://frontdeskdentalai.com
@@ -99,8 +99,9 @@
 - Submit → "We'll be in touch within 24 hours"
 
 ### Known open items (not blockers, just not yet built):
-- No exception handling around `update_patient`'s write to `normalized_phone` — could throw an uncaught `DuplicateKeyError` → 500 if a phone update collides with another patient's number in the same practice. Same class of bug fixed on `create_patient` this session; `update_patient` wasn't in scope.
 - Founding Clinic modal theme is light (matches the public marketing site), not dark — flagging since it was originally requested as "dark," in case that was intentional for a reason not yet communicated.
+
+*(`update_patient` DuplicateKeyError handling — previously listed here — fixed and committed, see Done ✅ below. Not yet deployed.)*
 
 ---
 
@@ -122,6 +123,7 @@
 - Double booking prevention — confirmed via live index check: `appointments.booking_key_unique`
 - Admin email notification system — 14 templates, 6/6 tests (as previously reported; not independently verified this session)
 - Founding Clinic modal, banner, and admin review queue — built and shipped this session
+- `update_patient` DuplicateKeyError handling — same pattern as `create_patient` (commit `0eb42c33`), returns 409 instead of 500 on phone-number collision. Committed as `4e273090`, **not yet deployed** (explicitly held per instruction).
 
 ### In Progress 🔄
 - Incorporation — BC Provincial, lawyer engaged, paperwork in progress
@@ -136,7 +138,7 @@
 - SLA definition document
 - Marketing assets (demo video, onboarding PDF, outreach sequences)
 - Link a real phone number to the Retell agent in `settings.retell.phone_number` (currently unset in our DB even though the agent itself is provisioned)
-- `update_patient` DuplicateKeyError handling (see Known open items above)
+- Deploy the `update_patient` DuplicateKeyError fix (committed as `4e273090`, held per explicit instruction — see Done ✅)
 
 ### Pending — Blocked on Incorporation ⏳
 - Corporate bank account
@@ -145,12 +147,14 @@
 - Clinic service agreement signing
 
 ### Urgent ⚠️
-- MongoDB Atlas payment — suspends 07/31/26 (**check this date — if "Last updated" above is later than 07/31/26, this may already have happened or needs updating**)
+- None currently. MongoDB Atlas payment (previously flagged here as suspending 07/31/26) is reactivated — independently verified via a live connection check on 2026-08-07 (ping + query against `practices` succeeded, returned 4 documents). If this file goes stale again, re-verify with a direct connection check rather than trusting this line — that's exactly how the previous stale warning happened.
 
 ---
 
 ## Recent Commits (Last 10)
 ```
+4e273090 fix(patients): catch DuplicateKeyError on update_patient, return 409
+756a2924 docs: add living HANDOFF.md for session continuity
 2de0bbde feat(founding-clinic): soft launch modal, banner, and admin review queue
 0eb42c33 fix(patients): add normalized_phone to staff-created patients + catch DuplicateKeyError
 33b7654e fix: standardize frontend URL defaults to frontdeskdentalai.com
@@ -159,8 +163,6 @@
 4012d32a fix(superadmin-retell): replace automation badge with manual setup flow
 dedf43c4 fix(patients): add consent endpoint and Mark Consent button
 1cbd0ed7 fix(plans+onboarding): gate Enterprise/Elite behind contact sales
-a30d4d9b feat(superadmin): lead approval queue + country/province fields
-3bb37c66 feat(onboarding): hardening batch + email + security fixes
 ```
 
 ---
