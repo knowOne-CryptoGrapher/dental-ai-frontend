@@ -1,6 +1,6 @@
 # Dental AI — Living Handoff Document
 **Last updated:** 2026-08-07
-**Backend revision:** dental-ai-backend-00077-97s (unchanged — `update_patient` fix committed but not yet deployed, per explicit instruction to hold deploy)
+**Backend revision:** dental-ai-backend-00077-97s (unchanged — `update_patient` fix and founding_clinic provisioning fix both committed but not yet deployed, per explicit instruction to hold deploy)
 **Frontend commit:** 477a33b0
 **Branch:** unlocked-main
 **Backend URL:** https://dental-ai-backend-cszmxu7emq-uw.a.run.app
@@ -101,8 +101,11 @@
 
 ### Known open items (not blockers, just not yet built):
 - Founding Clinic modal theme is light (matches the public marketing site), not dark — flagging since it was originally requested as "dark," in case that was intentional for a reason not yet communicated.
+- Founding Clinic modal's live marketing copy still says "$499 regular price / 40% off" — actual Basic price in `plans.py` is $399 (~25% off). Pre-existing bug, unrelated to this session's provisioning fix, deliberately left untouched per instruction — see Pending list below.
 
 *(`update_patient` DuplicateKeyError handling — previously listed here — fixed and committed, see Done ✅ below. Not yet deployed.)*
+
+*(A critical gap identified this session — `approve_founding_clinic` only flipped a status flag and never actually created a practice/user/plan, and no `founding_clinic` tier existed in `plans.py` — is now fixed, see Done ✅ below. Not yet deployed.)*
 
 ---
 
@@ -125,6 +128,7 @@
 - Admin email notification system — 14 templates, 6/6 tests (as previously reported; not independently verified this session)
 - Founding Clinic modal, banner, and admin review queue — built and shipped this session
 - `update_patient` DuplicateKeyError handling — same pattern as `create_patient` (commit `0eb42c33`), returns 409 instead of 500 on phone-number collision. Committed as `4e273090`, **not yet deployed** (explicitly held per instruction).
+- **Founding Clinic tier + real provisioning** — `founding_clinic` is now a real, distinct entry in `plans.py`'s `PLANS` dict ($299/mo, same feature set as Basic plus a new `insurance_preview: bool` flag on `PlanFeatures` — additive-only, does not touch the real `insurance` gate so Insurance/Claims endpoints stay 402-blocked for these accounts). Marked `public=False` (new `Plan.public` field, defaults `True` for all other tiers) so it's excluded from `GET /billing/plans` and never shows up as a self-serve-subscribable option to existing Basic/Professional/Enterprise/Elite customers. `approve_founding_clinic` (`superadmin_router.py`) now mirrors `approve_lead`'s pattern exactly — creates a real practice (`subscription_plan: "founding_clinic"`), a location, a 72h invite token, sends the welcome email, and writes `practice_id` back onto the application doc — instead of only flipping a status flag as before. Checkout/upgrade to Professional/Enterprise/Elite confirmed to work through the existing generic `/billing/checkout` flow with zero special-casing (validated purely by `plan_id in PLANS`, no hardcoded tier lists). Committed as `2e2fb1a4`, **not yet deployed**.
 - **Cloud Run monitoring + alerting** — configured and verified on the `dental-ai-backend` service (us-west1):
   - Notification channel: email to `d9john5@gmail.com` (`projects/dental-ai-backend/notificationChannels/8095552477318138556`). **Created but not yet verified** — GCP sends a confirmation email; until it's clicked, this channel will not deliver alerts.
   - Uptime check on `/health/ready` (verifies Mongo connectivity, not just process liveness — deliberately chosen over `/health/live` since that's the exact failure mode the Atlas payment lapse would have been), every 5 min, 10s timeout (`dental-ai-backend-uptime-4AQ1g7YCSEo`). Config path and live endpoint both independently confirmed correct after a Git-Bash/MSYS path-mangling bug silently broke the first two creation attempts (caught by describing the resource back rather than trusting the create command's success message).
@@ -144,9 +148,15 @@
 - Marketing assets (demo video, onboarding PDF, outreach sequences)
 - Link a real phone number to the Retell agent in `settings.retell.phone_number` (currently unset in our DB even though the agent itself is provisioned)
 - Deploy the `update_patient` DuplicateKeyError fix (committed as `4e273090`, held per explicit instruction — see Done ✅)
+- Deploy the founding_clinic tier + real provisioning fix (committed as `2e2fb1a4`, held per explicit instruction — see Done ✅)
+- Fix Founding Clinic marketing copy: live copy says "$499 regular price / 40% off," actual Basic price in `plans.py` is $399 (~25% off). Pre-existing bug, found and deliberately left unfixed this session — needs a follow-up prompt.
+- Configure `STRIPE_PRICE_FOUNDING_CLINIC` (create a real recurring Stripe Price + set the env var). Without it, `create_checkout_session` silently falls back to a one-time charge instead of a real $299/mo subscription for founding_clinic accounts. Intentionally deferred — test-only software, single user, accepted risk for now.
 - Click the verification link sent to `d9john5@gmail.com` for the new monitoring notification channel — alerts are silently inert until this is done
 - Fix cosmetic em-dash-to-`?` mangling in the error-rate alert policy's display name (functionality unaffected)
 - Minor pre-existing test bug (not introduced this session, confirmed via `git blame` + isolated worktree rerun to predate it by 3+ weeks, commit `608829c37` / 2026-07-13): `tests/test_patient_deduplication.py::test_book_appointment_dedup` fails with `TypeError: object MagicMock can't be used in 'await' expression` — the test's `db.appointments` mock never sets up `find_one` as an `AsyncMock`, but `book_appointment_realtime`'s double-booking conflict check (`retell_api_router.py`) calls `await db.appointments.find_one(...)`. Low priority, but worth a quick fix to keep the suite green.
+- More pre-existing, stale plan-tier tests found this session (confirmed via `git show HEAD:backend/plans.py` — the Elite tier and Basic's `audit_log=True` were both already committed in `4f47b31a`, while `test_plan_tiers.py`/`test_billing.py` were last touched in the earlier `4adff4e1` "Initial restore commit" and never updated): `test_plan_registry_has_three_tiers`, `test_basic_plan_disables_escalation_features`, `test_enterprise_unlocks_everything`, and `test_plans_endpoint_public_and_returns_three_plans` all hard-code assumptions from a 3-tier, no-audit-log world. Adding `founding_clinic` this session didn't newly break any of these (each was already failing before this session's diff), but it's worth a follow-up to rewrite them against the current 4-tier (now 5, counting founding_clinic) reality.
+- **Sizeable test-coverage gap, not just a pre-existing footnote:** 44 of the 102 tests collected this session (43%) errored at fixture setup because `owner@dentalai.com` and `admin@dentaltest.com` don't exist in the DB this local backend connects to (confirmed via direct read-only Mongo query — `None` for both). That's the entirety of `test_superadmin_re.py` and `test_platform_console.py`, plus most of `test_plan_tiers.py`'s and `test_billing.py`'s HTTP-integration tests — meaning superadmin RBAC, practice suspend/activate, plan-change auditing, and Stripe checkout/portal currently have **zero working local test coverage** until these two accounts are seeded. Unrelated to any code change this session, but it's a real gap, not a shrug-and-move-on item — worth seeding these accounts (or a `conftest.py` fixture that creates them) before relying on this suite to catch regressions.
+- Local venv drift discovered this session: `backend/venv/` was missing `slowapi` and `python-json-logger` even though both are pinned in `requirements.txt` (lines 42 and 39) — the venv just predates when those deps were added to the manifest. Reinstalled via `pip install -r requirements.txt` to get the local server running for this session's test pass; not a manifest gap, just worth knowing the checked-in `venv/` can silently drift from `requirements.txt`.
 
 ### Pending — Blocked on Incorporation ⏳
 - Corporate bank account
@@ -161,6 +171,8 @@
 
 ## Recent Commits (Last 10)
 ```
+2e2fb1a4 feat(founding-clinic): provision real practice on approval, add founding_clinic plan tier with insurance preview flag
+aed40a74 docs: update HANDOFF.md
 477a33b0 docs: update HANDOFF.md
 4e273090 fix(patients): catch DuplicateKeyError on update_patient, return 409
 756a2924 docs: add living HANDOFF.md for session continuity
@@ -169,8 +181,6 @@
 33b7654e fix: standardize frontend URL defaults to frontdeskdentalai.com
 09dd6cfc fix: replace emergent.sh placeholder URLs with real backend URL
 44e318db fix(superadmin): replace emergent.sh placeholder URL with real backend URL
-4012d32a fix(superadmin-retell): replace automation badge with manual setup flow
-dedf43c4 fix(patients): add consent endpoint and Mark Consent button
 ```
 
 ---
