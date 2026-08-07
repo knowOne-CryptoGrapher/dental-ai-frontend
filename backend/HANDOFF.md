@@ -1,7 +1,7 @@
 # Dental AI — Living Handoff Document
 **Last updated:** 2026-08-07
 **Backend revision:** dental-ai-backend-00077-97s (unchanged — `update_patient` fix committed but not yet deployed, per explicit instruction to hold deploy)
-**Frontend commit:** 4e273090
+**Frontend commit:** 477a33b0
 **Branch:** unlocked-main
 **Backend URL:** https://dental-ai-backend-cszmxu7emq-uw.a.run.app
 **Frontend URL:** https://frontdeskdentalai.com
@@ -57,6 +57,7 @@
 9. Never deploy until Darnell confirms diffs
 10. Before stress tests — confirm `admin@dentalai.test` exists in DB
 11. Before recording facts in this file, verify them against the live system rather than carrying forward a prior draft — several figures in earlier drafts of this doc (DB counts, index counts, revision/commit hashes) were stale by the time they were written down. Treat this file as a snapshot with a timestamp, not a permanent truth.
+12. Update this file at the end of every task, not just at the end of a session — standing requirement as of 2026-08-07, don't wait to be asked.
 
 ---
 
@@ -124,13 +125,17 @@
 - Admin email notification system — 14 templates, 6/6 tests (as previously reported; not independently verified this session)
 - Founding Clinic modal, banner, and admin review queue — built and shipped this session
 - `update_patient` DuplicateKeyError handling — same pattern as `create_patient` (commit `0eb42c33`), returns 409 instead of 500 on phone-number collision. Committed as `4e273090`, **not yet deployed** (explicitly held per instruction).
+- **Cloud Run monitoring + alerting** — configured and verified on the `dental-ai-backend` service (us-west1):
+  - Notification channel: email to `d9john5@gmail.com` (`projects/dental-ai-backend/notificationChannels/8095552477318138556`). **Created but not yet verified** — GCP sends a confirmation email; until it's clicked, this channel will not deliver alerts.
+  - Uptime check on `/health/ready` (verifies Mongo connectivity, not just process liveness — deliberately chosen over `/health/live` since that's the exact failure mode the Atlas payment lapse would have been), every 5 min, 10s timeout (`dental-ai-backend-uptime-4AQ1g7YCSEo`). Config path and live endpoint both independently confirmed correct after a Git-Bash/MSYS path-mangling bug silently broke the first two creation attempts (caught by describing the resource back rather than trusting the create command's success message).
+  - Error rate alert policy (`projects/dental-ai-backend/alertPolicies/5969776322765396001`): fires when 5xx ratio exceeds 5% AND total request volume exceeds 20 requests, both over a 5-minute window — volume gate added specifically to avoid false alarms at current low pre-launch traffic. Single MQL condition (GCP disallows mixing MQL conditions with other condition types in one policy). Took several iterations against real API validation errors (field placement, Double/Int type mismatches, rate-vs-delta unit mismatch, integer-division risk) before creating successfully; described back afterward and every field confirmed matching intent.
+  - **Not covered:** a second, separate Cloud Run service (`dental-ai-router`, us-central1, `backend/router_service/service.yaml`) has no monitoring configured — out of scope for this task, flagging in case it's wanted later.
 
 ### In Progress 🔄
 - Incorporation — BC Provincial, lawyer engaged, paperwork in progress
 
 ### Pending — No Blockers ⏳
 - MongoDB backup configuration
-- Monitoring + alerting setup (Cloud Run metrics, error rate alerts)
 - Refund logic in Stripe
 - Data Processing Agreement draft
 - Clinic Service Agreement draft
@@ -139,6 +144,9 @@
 - Marketing assets (demo video, onboarding PDF, outreach sequences)
 - Link a real phone number to the Retell agent in `settings.retell.phone_number` (currently unset in our DB even though the agent itself is provisioned)
 - Deploy the `update_patient` DuplicateKeyError fix (committed as `4e273090`, held per explicit instruction — see Done ✅)
+- Click the verification link sent to `d9john5@gmail.com` for the new monitoring notification channel — alerts are silently inert until this is done
+- Fix cosmetic em-dash-to-`?` mangling in the error-rate alert policy's display name (functionality unaffected)
+- Minor pre-existing test bug (not introduced this session, confirmed via `git blame` + isolated worktree rerun to predate it by 3+ weeks, commit `608829c37` / 2026-07-13): `tests/test_patient_deduplication.py::test_book_appointment_dedup` fails with `TypeError: object MagicMock can't be used in 'await' expression` — the test's `db.appointments` mock never sets up `find_one` as an `AsyncMock`, but `book_appointment_realtime`'s double-booking conflict check (`retell_api_router.py`) calls `await db.appointments.find_one(...)`. Low priority, but worth a quick fix to keep the suite green.
 
 ### Pending — Blocked on Incorporation ⏳
 - Corporate bank account
@@ -153,6 +161,7 @@
 
 ## Recent Commits (Last 10)
 ```
+477a33b0 docs: update HANDOFF.md
 4e273090 fix(patients): catch DuplicateKeyError on update_patient, return 409
 756a2924 docs: add living HANDOFF.md for session continuity
 2de0bbde feat(founding-clinic): soft launch modal, banner, and admin review queue
@@ -162,7 +171,6 @@
 44e318db fix(superadmin): replace emergent.sh placeholder URL with real backend URL
 4012d32a fix(superadmin-retell): replace automation badge with manual setup flow
 dedf43c4 fix(patients): add consent endpoint and Mark Consent button
-1cbd0ed7 fix(plans+onboarding): gate Enterprise/Elite behind contact sales
 ```
 
 ---
