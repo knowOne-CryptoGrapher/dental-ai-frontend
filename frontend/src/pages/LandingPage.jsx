@@ -62,7 +62,7 @@ const PLANS = [
   {
     id: 'basic',
     name: 'Basic',
-    price: '$399',
+    price: '$499',
     compliance: 'PHI-safe, PIPEDA/PIPA compliant',
     features: ['250 calls/mo', '5 providers', '1 location', 'Voice AI', 'Appointments', 'Audit Logs'],
     ctaLabel: 'Get Started',
@@ -71,7 +71,7 @@ const PLANS = [
   {
     id: 'professional',
     name: 'Professional',
-    price: '$599',
+    price: '$699',
     badge: 'Most Popular',
     isPopular: true,
     features: ['750 calls/mo', '15 providers', '5 locations', 'Everything in Basic', 'Analytics', 'Insurance/CDAnet'],

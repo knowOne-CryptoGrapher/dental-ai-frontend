@@ -17,7 +17,7 @@ const PLANS = [
   {
     id: 'basic',
     name: 'Basic',
-    price: '$399',
+    price: '$499',
     compliance: 'PHI-safe, PIPEDA/PIPA compliant',
     limits: { calls: '250', providers: '5', locations: '1', users: '5' },
     ctaLabel: 'Get Started',
@@ -26,7 +26,7 @@ const PLANS = [
   {
     id: 'professional',
     name: 'Professional',
-    price: '$599',
+    price: '$699',
     badge: 'Most Popular',
     isPopular: true,
     limits: { calls: '750', providers: '15', locations: '5', users: '25' },
@@ -105,8 +105,8 @@ const TABLE_ROWS = [
 const FOUNDING_BASIC_PRICE = { price: '$299', regular: '$499' };
 
 const PLAN_COLS = [
-  { id: 'basic',        name: 'Basic',        price: '$399'   },
-  { id: 'professional', name: 'Professional', price: '$599'   },
+  { id: 'basic',        name: 'Basic',        price: '$499'   },
+  { id: 'professional', name: 'Professional', price: '$699'   },
   { id: 'enterprise',   name: 'Enterprise',   price: '$999'   },
   { id: 'elite',        name: 'Elite',        price: '$1,499' },
 ];

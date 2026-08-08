@@ -47,8 +47,8 @@ def test_plans_have_required_fields_and_no_secret_price_id():
 def test_basic_plan_pricing_matches_business_decision():
     r = httpx.get(f"{API}/billing/plans")
     by_id = {p["id"]: p for p in r.json()}
-    assert by_id["basic"]["price_usd"] == 399.0
-    assert by_id["professional"]["price_usd"] == 599.0
+    assert by_id["basic"]["price_usd"] == 499.0
+    assert by_id["professional"]["price_usd"] == 699.0
     assert by_id["enterprise"]["price_usd"] == 999.0
 
 

@@ -60,7 +60,7 @@ const WIZARD_PLANS = [
   {
     id: 'basic',
     name: 'Basic',
-    price: '$399',
+    price: '$499',
     badge: null,
     isElite: false,
     isPopular: false,
@@ -69,7 +69,7 @@ const WIZARD_PLANS = [
   {
     id: 'professional',
     name: 'Professional',
-    price: '$599',
+    price: '$699',
     badge: 'Most Popular',
     isElite: false,
     isPopular: true,

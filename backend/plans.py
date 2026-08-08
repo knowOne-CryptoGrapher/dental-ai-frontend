@@ -141,7 +141,7 @@ _ELITE_LLM = PlanLLM(
 
 PLANS: dict[str, Plan] = {
     "basic": Plan(
-        id="basic", name="Basic", price_usd=399.0, sort_order=0,
+        id="basic", name="Basic", price_usd=499.0, sort_order=0,
         description="Perfect for solo practitioners. Single location, cheap-model AI receptionist.",
         stripe_price_id_env="STRIPE_PRICE_BASIC",
         limits=PlanLimits(calls_per_month=250, providers_max=5, locations_max=1, users_max=5),
@@ -149,7 +149,7 @@ PLANS: dict[str, Plan] = {
         llm=_BASIC_LLM,
     ),
     "professional": Plan(
-        id="professional", name="Professional", price_usd=599.0, sort_order=1,
+        id="professional", name="Professional", price_usd=699.0, sort_order=1,
         description="Multi-provider, smart-routing AI receptionist with full analytics and insurance.",
         stripe_price_id_env="STRIPE_PRICE_PROFESSIONAL",
         limits=PlanLimits(calls_per_month=750, providers_max=15, locations_max=5, users_max=25),

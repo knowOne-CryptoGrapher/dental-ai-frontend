@@ -9,8 +9,8 @@ import {
 } from './ui/dialog';
 
 const PLAN_COLS = [
-  { id: 'basic',        name: 'Basic',        price: '$399'   },
-  { id: 'professional', name: 'Professional', price: '$599'   },
+  { id: 'basic',        name: 'Basic',        price: '$499'   },
+  { id: 'professional', name: 'Professional', price: '$699'   },
   { id: 'enterprise',   name: 'Enterprise',   price: '$999'   },
   { id: 'elite',        name: 'Elite',        price: '$1,499' },
 ];
