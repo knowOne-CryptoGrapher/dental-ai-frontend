@@ -2,19 +2,20 @@
 Public API endpoints for Retell AI agent to call during conversations.
 These endpoints do NOT require authentication (verified by Retell signature instead).
 """
-from fastapi import APIRouter, HTTPException, Header, Request
+from fastapi import APIRouter, HTTPException, Request
 from datetime import datetime, timedelta
 import logging
 import os
-import hmac
-import hashlib
 
 from auth import get_db
 from utils.phi_redaction import mask_phone
 from utils.phone import normalize_phone
+from utils.retell_security import verify_retell_webhook_signature
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/retell", tags=["retell_public_api"])
+
+RETELL_API_KEY = os.environ.get("RETELL_API_KEY", "").strip()
 
 
 async def _parse_retell_body(request: Request) -> dict:
@@ -62,33 +63,37 @@ async def _parse_retell_body(request: Request) -> dict:
     return args
 
 
-def verify_retell_signature(body: str, signature: str, api_key: str) -> bool:
-    """Verify Retell webhook signature"""
+async def _verify_retell_call(request: Request) -> None:
+    """
+    Verify Retell's X-Retell-Signature on a live custom-function call.
+
+    Retell automatically signs every custom function request with the
+    account's RETELL_API_KEY (HMAC-SHA256 over body+timestamp) — this is
+    NOT optional or dashboard-configurable, unlike webhook secrets. See
+    https://docs.retellai.com/build/single-multi-prompt/custom-function.
+
+    Reuses verify_retell_webhook_signature(), the same implementation
+    retell_webhook_router_v2.py uses for /api/retell/webhook — confirmed
+    algorithmically identical to Retell's own installed SDK
+    (retell/lib/webhook_auth.py) — just with RETELL_API_KEY instead of
+    RETELL_WEBHOOK_SECRET, which is what Retell actually signs function
+    calls with. Any failure returns 401 immediately, matching the webhook
+    handler's failure behavior exactly.
+    """
+    if not RETELL_API_KEY:
+        logger.error("retell_api_key_not_configured")
+        raise HTTPException(status_code=500, detail="Retell API key not configured")
     try:
-        parts = signature.split(",")
-        timestamp_part = [p for p in parts if p.startswith("t=")][0]
-        digest_part = [p for p in parts if p.startswith("v1=")][0].replace("v1=", "")
-        request_timestamp = int(timestamp_part.replace("t=", ""))
-        
-        # Check timestamp is within 5 minutes
-        current_time_ms = int(datetime.now().timestamp() * 1000)
-        if abs(current_time_ms - request_timestamp) > 300000:
-            return False
-        
-        # Verify HMAC
-        message = body.encode() + str(request_timestamp).encode()
-        expected = hmac.new(api_key.encode(), message, hashlib.sha256).hexdigest()
-        return hmac.compare_digest(expected, digest_part)
-    except Exception as e:
-        logger.error(f"Signature verification error: {e}")
-        return False
+        await verify_retell_webhook_signature(request, RETELL_API_KEY)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("retell_function_call_verify_error", extra={"error": str(exc)})
+        raise HTTPException(status_code=401, detail="Signature verification failed")
 
 
 @router.post("/check-provider-availability")
-async def check_provider_availability(
-    request: Request,
-    x_retell_signature: str = Header(None)
-):
+async def check_provider_availability(request: Request):
     """
     PUBLIC endpoint for Retell AI to check provider availability during calls.
     
@@ -109,19 +114,10 @@ async def check_provider_availability(
         "message": "Dr. Smith is available on May 15th at 2 PM"
     }
     """
-    
-    # Verify Retell signature for security
-    body_bytes = await request.body()
-    
-    # Only verify signature if we have Retell API key configured
-    retell_api_key = os.getenv("RETELL_API_KEY")
-    # Signature verification disabled on custom function endpoints.
-    # Retell custom functions are plain HTTPS POSTs, not signed like webhook events.
-    # The webhook handler at /api/webhooks/retell still verifies signatures.
-    _ = (retell_api_key, x_retell_signature, body_bytes)
-    
+    await _verify_retell_call(request)
+
     data = await _parse_retell_body(request)
-    
+
     practice_id = data.get("practice_id")
     provider_name_query = data.get("provider_name", "").lower().strip()
     requested_date = data.get("date")  # YYYY-MM-DD
@@ -335,10 +331,7 @@ async def check_provider_availability(
 
 
 @router.post("/list-providers")
-async def list_available_providers(
-    request: Request,
-    x_retell_signature: str = Header(None)
-):
+async def list_available_providers(request: Request):
     """
     PUBLIC endpoint for Retell AI to list all available providers.
     
@@ -357,14 +350,8 @@ async def list_available_providers(
         "message": "We have 3 providers available: Dr. Smith, Dr. Johnson, and Dr. Rodriguez."
     }
     """
-    # Verify signature (same as above)
-    body_bytes = await request.body()
-    retell_api_key = os.getenv("RETELL_API_KEY")
-    # Signature verification disabled on custom function endpoints.
-    # Retell custom functions are plain HTTPS POSTs, not signed like webhook events.
-    # The webhook handler at /api/webhooks/retell still verifies signatures.
-    _ = (retell_api_key, x_retell_signature, body_bytes)
-    
+    await _verify_retell_call(request)
+
     data = await _parse_retell_body(request)
     practice_id = data.get("practice_id")
     specialty = data.get("specialty")
@@ -421,10 +408,7 @@ async def list_available_providers(
 
 
 @router.post("/lookup-patient")
-async def lookup_patient_by_phone(
-    request: Request,
-    x_retell_signature: str = Header(None)
-):
+async def lookup_patient_by_phone(request: Request):
     """
     PUBLIC endpoint for Retell AI to look up existing patient by phone number.
     
@@ -462,24 +446,18 @@ async def lookup_patient_by_phone(
         "message": "I don't see an existing account with this number. I'll create a new patient record for you."
     }
     """
-    # Verify signature
-    body_bytes = await request.body()
-    retell_api_key = os.getenv("RETELL_API_KEY")
-    # Signature verification disabled on custom function endpoints.
-    # Retell custom functions are plain HTTPS POSTs, not signed like webhook events.
-    # The webhook handler at /api/webhooks/retell still verifies signatures.
-    _ = (retell_api_key, x_retell_signature, body_bytes)
-    
+    await _verify_retell_call(request)
+
     data = await _parse_retell_body(request)
     practice_id = data.get("practice_id")
     phone_number = data.get("phone_number", "").strip()
-    
+
     if not practice_id or not phone_number:
         raise HTTPException(
             status_code=400,
             detail="practice_id and phone_number are required"
         )
-    
+
     logger.info("retell_patient_lookup", extra={"phone": mask_phone(phone_number), "practice_id": practice_id})
     
     db = get_db()
@@ -630,10 +608,7 @@ async def lookup_patient_by_phone(
 
 
 @router.post("/register-patient")
-async def register_patient_realtime(
-    request: Request,
-    x_retell_signature: str = Header(None)
-):
+async def register_patient_realtime(request: Request):
     """
     PUBLIC endpoint for Retell AI to register a NEW patient during a call,
     WITHOUT booking an appointment. Use when the caller just wants to set up
@@ -661,8 +636,7 @@ async def register_patient_realtime(
         "message": "You're all set, Jane! Your profile is created."
       }
     """
-    # Signature verification intentionally disabled (see _parse_retell_body notes)
-    _ = (os.getenv("RETELL_API_KEY"), x_retell_signature, await request.body())
+    await _verify_retell_call(request)
 
     data = await _parse_retell_body(request)
     practice_id = data.get("practice_id")
@@ -752,10 +726,7 @@ async def register_patient_realtime(
 
 
 @router.post("/book-appointment")
-async def book_appointment_realtime(
-    request: Request,
-    x_retell_signature: str = Header(None)
-):
+async def book_appointment_realtime(request: Request):
     """
     PUBLIC endpoint for Retell AI to book appointments in real-time during calls.
     
@@ -786,14 +757,8 @@ async def book_appointment_realtime(
         "message": "Appointment booked successfully for May 20th at 2:00 PM with Dr. Sarah Smith."
     }
     """
-    # Verify signature
-    body_bytes = await request.body()
-    retell_api_key = os.getenv("RETELL_API_KEY")
-    # Signature verification disabled on custom function endpoints.
-    # Retell custom functions are plain HTTPS POSTs, not signed like webhook events.
-    # The webhook handler at /api/webhooks/retell still verifies signatures.
-    _ = (retell_api_key, x_retell_signature, body_bytes)
-    
+    await _verify_retell_call(request)
+
     data = await _parse_retell_body(request)
     practice_id = data.get("practice_id")
     patient_phone = data.get("patient_phone")
@@ -973,10 +938,7 @@ async def book_appointment_realtime(
 
 
 @router.post("/get-patient-appointments")
-async def get_patient_upcoming_appointments(
-    request: Request,
-    x_retell_signature: str = Header(None)
-):
+async def get_patient_upcoming_appointments(request: Request):
     """
     PUBLIC endpoint for Retell AI to get patient's UPCOMING appointments.
     
@@ -1004,18 +966,12 @@ async def get_patient_upcoming_appointments(
         "message": "You have 1 upcoming appointment on May 20th at 2:00 PM with Dr. Sarah Smith."
     }
     """
-    # Verify signature
-    body_bytes = await request.body()
-    retell_api_key = os.getenv("RETELL_API_KEY")
-    # Signature verification disabled on custom function endpoints.
-    # Retell custom functions are plain HTTPS POSTs, not signed like webhook events.
-    # The webhook handler at /api/webhooks/retell still verifies signatures.
-    _ = (retell_api_key, x_retell_signature, body_bytes)
-    
+    await _verify_retell_call(request)
+
     data = await _parse_retell_body(request)
     practice_id = data.get("practice_id")
     phone_number = data.get("phone_number", "").strip()
-    
+
     if not practice_id or not phone_number:
         raise HTTPException(status_code=400, detail="practice_id and phone_number required")
     
@@ -1099,10 +1055,7 @@ async def get_patient_upcoming_appointments(
 
 
 @router.post("/cancel-appointment")
-async def cancel_appointment_by_id(
-    request: Request,
-    x_retell_signature: str = Header(None)
-):
+async def cancel_appointment_by_id(request: Request):
     """
     PUBLIC endpoint for Retell AI to cancel an appointment.
     
@@ -1119,14 +1072,8 @@ async def cancel_appointment_by_id(
         "message": "Appointment on May 20th at 2:00 PM has been cancelled."
     }
     """
-    # Verify signature
-    body_bytes = await request.body()
-    retell_api_key = os.getenv("RETELL_API_KEY")
-    # Signature verification disabled on custom function endpoints.
-    # Retell custom functions are plain HTTPS POSTs, not signed like webhook events.
-    # The webhook handler at /api/webhooks/retell still verifies signatures.
-    _ = (retell_api_key, x_retell_signature, body_bytes)
-    
+    await _verify_retell_call(request)
+
     data = await _parse_retell_body(request)
     practice_id = data.get("practice_id")
     appointment_id = data.get("appointment_id")
