@@ -2,8 +2,12 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Check } from 'lucide-react';
 
-export default function PricingPreviewCard({ name, price, badge, features, ctaLabel, ctaHref, onCtaClick, isElite, isPopular, compliance }) {
+export default function PricingPreviewCard({
+  name, price, badge, features, ctaLabel, ctaHref, onCtaClick, isElite, isPopular, compliance,
+  foundingPrice, foundingRegularPrice, foundingSpotsRemaining, onFoundingClick,
+}) {
   const useAnchor = ctaHref?.startsWith('mailto:') || ctaHref?.startsWith('/contact-sales');
+  const showFounding = Boolean(foundingPrice) && foundingSpotsRemaining !== null && foundingSpotsRemaining > 0;
 
   const cardClass = [
     'bg-white rounded-xl p-6 flex flex-col shadow-sm relative',
@@ -36,10 +40,18 @@ export default function PricingPreviewCard({ name, price, badge, features, ctaLa
 
       <div className="mb-4">
         <h3 className={`text-lg font-bold mb-1 ${isElite ? 'text-[#b8962f]' : 'text-slate-900'}`}>{name}</h3>
-        <div className="flex items-baseline gap-1">
-          <span className="text-3xl font-bold text-slate-900">{price}</span>
-          <span className="text-sm text-slate-500">/mo</span>
-        </div>
+        {showFounding ? (
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <span className="text-base text-slate-400 line-through">{foundingRegularPrice}</span>
+            <span className="text-3xl font-bold text-teal-700">{foundingPrice}</span>
+            <span className="text-sm text-slate-500">/mo</span>
+          </div>
+        ) : (
+          <div className="flex items-baseline gap-1">
+            <span className="text-3xl font-bold text-slate-900">{price}</span>
+            <span className="text-sm text-slate-500">/mo</span>
+          </div>
+        )}
       </div>
 
       {compliance && (
@@ -69,6 +81,21 @@ export default function PricingPreviewCard({ name, price, badge, features, ctaLa
         <Link to={ctaHref} className={ctaClass} style={ctaStyle}>
           {ctaLabel}
         </Link>
+      )}
+
+      {showFounding && onFoundingClick && (
+        <>
+          <div className="text-xs text-teal-600 font-medium mt-2 text-center">
+            🦷 First 10 clients only — {foundingSpotsRemaining} spot{foundingSpotsRemaining === 1 ? '' : 's'} left
+          </div>
+          <button
+            type="button"
+            onClick={onFoundingClick}
+            className="block w-full text-center py-2 px-4 rounded-md text-xs font-semibold border border-teal-300 text-teal-700 hover:bg-teal-50 transition-colors mt-2"
+          >
+            Apply for Founding Clinic rate
+          </button>
+        </>
       )}
     </div>
   );

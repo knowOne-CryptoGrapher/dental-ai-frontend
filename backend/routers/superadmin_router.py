@@ -558,7 +558,7 @@ async def approve_founding_clinic(
         "contact_phone": app_doc.get("phone"),
         "status": "onboarding",
         "billing_status": "active",
-        "subscription_plan": "founding_clinic",
+        "subscription_plan": "founding_clinic_basic",
         "default_timezone": "America/Toronto",
         "default_retention_years": 7,
         "settings": default_practice_settings(),

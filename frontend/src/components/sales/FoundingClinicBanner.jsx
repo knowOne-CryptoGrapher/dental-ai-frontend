@@ -1,12 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import FoundingClinicModal from './FoundingClinicModal';
+import { API_BASE_URL } from '../../config/api';
 
 const DISMISS_KEY = 'founding_banner_dismissed';
 
 export default function FoundingClinicBanner() {
   const [dismissed, setDismissed] = useState(() => localStorage.getItem(DISMISS_KEY) === 'true');
   const [modalOpen, setModalOpen] = useState(false);
+  const [spotsRemaining, setSpotsRemaining] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_BASE_URL}/api/sales/founding-clinic-count`)
+      .then(res => res.json())
+      .then(data => { if (!cancelled) setSpotsRemaining(data.spots_remaining); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const handleDismiss = () => {
     localStorage.setItem(DISMISS_KEY, 'true');
@@ -14,6 +25,7 @@ export default function FoundingClinicBanner() {
   };
 
   if (dismissed) return null;
+  if (spotsRemaining === 0) return null;
 
   return (
     <>

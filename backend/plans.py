@@ -180,8 +180,8 @@ PLANS: dict[str, Plan] = {
         ),
         llm=_ELITE_LLM,
     ),
-    "founding_clinic": Plan(
-        id="founding_clinic", name="Founding Clinic", price_usd=299.0, sort_order=99,
+    "founding_clinic_basic": Plan(
+        id="founding_clinic_basic", name="Founding Clinic (Basic)", price_usd=299.0, sort_order=99,
         public=False,
         description="Founding Clinic Program — locked-in early-adopter rate.",
         stripe_price_id_env="STRIPE_PRICE_FOUNDING_CLINIC",

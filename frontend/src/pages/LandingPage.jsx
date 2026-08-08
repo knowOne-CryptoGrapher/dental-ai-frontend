@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Phone, ShieldCheck, Globe, MapPin, BarChart2, Menu, X, ChevronRight } from 'lucide-react';
 import FeatureCard from '../components/landing/FeatureCard';
@@ -7,6 +7,8 @@ import PricingPreviewCard from '../components/landing/PricingPreviewCard';
 import StepCard from '../components/landing/StepCard';
 import ContactSalesModal from '../components/sales/ContactSalesModal';
 import FoundingClinicBanner from '../components/sales/FoundingClinicBanner';
+import FoundingClinicModal from '../components/sales/FoundingClinicModal';
+import { API_BASE_URL } from '../config/api';
 
 const FEATURES = [
   {
@@ -58,6 +60,7 @@ const STEPS = [
 
 const PLANS = [
   {
+    id: 'basic',
     name: 'Basic',
     price: '$399',
     compliance: 'PHI-safe, PIPEDA/PIPA compliant',
@@ -66,6 +69,7 @@ const PLANS = [
     ctaHref: '/signup?plan=basic',
   },
   {
+    id: 'professional',
     name: 'Professional',
     price: '$599',
     badge: 'Most Popular',
@@ -75,6 +79,7 @@ const PLANS = [
     ctaHref: '/signup?plan=professional',
   },
   {
+    id: 'enterprise',
     name: 'Enterprise',
     price: '$999',
     features: ['2,500 calls/mo', '50 providers', '25 locations', 'Everything in Professional', 'Knowledge Base', 'Routing Rules'],
@@ -82,6 +87,7 @@ const PLANS = [
     ctaHref: '/contact-sales?plan=enterprise',
   },
   {
+    id: 'elite',
     name: 'Elite',
     price: '$1,499',
     badge: 'Most Powerful',
@@ -100,6 +106,9 @@ const PLANS = [
     ctaHref: '/contact-sales?plan=elite',
   },
 ];
+
+// Founding Clinic rate overlay — Basic only. Independent literal, not derived from `price` above.
+const FOUNDING_BASIC_PRICE = { price: '$299', regular: '$499' };
 
 const TESTIMONIALS = [
   {
@@ -128,6 +137,17 @@ const TESTIMONIALS = [
 export default function LandingPage() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [salesModal, setSalesModal] = useState({ open: false, plan: 'enterprise' });
+  const [foundingModalOpen, setFoundingModalOpen] = useState(false);
+  const [foundingSpots, setFoundingSpots] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_BASE_URL}/api/sales/founding-clinic-count`)
+      .then(res => res.json())
+      .then(data => { if (!cancelled) setFoundingSpots(data.spots_remaining); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   return (
     <div className="min-h-screen bg-white">
@@ -335,7 +355,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 items-start">
             {PLANS.map((plan) => (
               <PricingPreviewCard
-                key={plan.name}
+                key={plan.id}
                 name={plan.name}
                 price={plan.price}
                 badge={plan.badge}
@@ -344,12 +364,16 @@ export default function LandingPage() {
                 ctaHref={plan.ctaHref}
                 onCtaClick={
                   plan.ctaHref?.startsWith('/contact-sales')
-                    ? () => setSalesModal({ open: true, plan: plan.name.toLowerCase() })
+                    ? () => setSalesModal({ open: true, plan: plan.id })
                     : undefined
                 }
                 isElite={plan.isElite}
                 isPopular={plan.isPopular}
                 compliance={plan.compliance}
+                foundingPrice={plan.id === 'basic' ? FOUNDING_BASIC_PRICE.price : undefined}
+                foundingRegularPrice={plan.id === 'basic' ? FOUNDING_BASIC_PRICE.regular : undefined}
+                foundingSpotsRemaining={plan.id === 'basic' ? foundingSpots : null}
+                onFoundingClick={plan.id === 'basic' ? () => setFoundingModalOpen(true) : undefined}
               />
             ))}
           </div>
@@ -417,6 +441,11 @@ export default function LandingPage() {
         isOpen={salesModal.open}
         onClose={() => setSalesModal(m => ({ ...m, open: false }))}
         requestedPlan={salesModal.plan}
+      />
+
+      <FoundingClinicModal
+        isOpen={foundingModalOpen}
+        onClose={() => setFoundingModalOpen(false)}
       />
 
       {/* ── FOOTER ── */}

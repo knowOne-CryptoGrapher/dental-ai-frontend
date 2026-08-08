@@ -101,6 +101,9 @@ const TABLE_ROWS = [
   { label: 'Custom Model Selection',  values: [false, false, false, true] },
 ];
 
+// Founding Clinic rate overlay — Basic only. Independent literal, not derived from `price` above.
+const FOUNDING_BASIC_PRICE = { price: '$299', regular: '$499' };
+
 const PLAN_COLS = [
   { id: 'basic',        name: 'Basic',        price: '$399'   },
   { id: 'professional', name: 'Professional', price: '$599'   },
@@ -174,6 +177,7 @@ function PlanCard({ plan, onCtaClick, onFoundingClick, foundingSpotsRemaining })
   const fKey = PLAN_FEATURE_KEY[plan.id];
   const useAnchor = plan.ctaHref?.startsWith('mailto:') || plan.ctaHref?.startsWith('/contact-sales');
   const isBasic = plan.id === 'basic';
+  const showFounding = isBasic && foundingSpotsRemaining !== null && foundingSpotsRemaining > 0;
 
   const cardBorder = plan.isElite
     ? {}
@@ -205,10 +209,18 @@ function PlanCard({ plan, onCtaClick, onFoundingClick, foundingSpotsRemaining })
         <h3 className={`text-lg font-bold mb-1 ${plan.isElite ? 'text-[#b8962f]' : 'text-slate-900'}`}>
           {plan.name}
         </h3>
-        <div className="flex items-baseline gap-1">
-          <span className="text-3xl font-bold text-slate-900">{plan.price}</span>
-          <span className="text-sm text-slate-500">/mo</span>
-        </div>
+        {showFounding ? (
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <span className="text-base text-slate-400 line-through">{FOUNDING_BASIC_PRICE.regular}</span>
+            <span className="text-3xl font-bold text-teal-700">{FOUNDING_BASIC_PRICE.price}</span>
+            <span className="text-sm text-slate-500">/mo</span>
+          </div>
+        ) : (
+          <div className="flex items-baseline gap-1">
+            <span className="text-3xl font-bold text-slate-900">{plan.price}</span>
+            <span className="text-sm text-slate-500">/mo</span>
+          </div>
+        )}
       </div>
 
       {plan.compliance && (
@@ -263,15 +275,11 @@ function PlanCard({ plan, onCtaClick, onFoundingClick, foundingSpotsRemaining })
         </Link>
       )}
 
-      {isBasic && onFoundingClick && (
+      {showFounding && onFoundingClick && (
         <>
-          {foundingSpotsRemaining !== null && (
-            <div className="text-xs text-teal-600 font-medium mt-2 text-center">
-              🦷 Founding Clinic rate: $299/mo — {foundingSpotsRemaining > 0
-                ? `${foundingSpotsRemaining} spot${foundingSpotsRemaining === 1 ? '' : 's'} left`
-                : 'waitlist open'}
-            </div>
-          )}
+          <div className="text-xs text-teal-600 font-medium mt-2 text-center">
+            🦷 First 10 clients only — {foundingSpotsRemaining} spot{foundingSpotsRemaining === 1 ? '' : 's'} left
+          </div>
           <button
             type="button"
             onClick={onFoundingClick}
