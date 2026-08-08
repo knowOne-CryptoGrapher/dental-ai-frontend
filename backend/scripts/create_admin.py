@@ -2,15 +2,26 @@
 Creates the initial admin user for the Dental AI test practice.
 Idempotent — skips insert if email already exists.
 """
+import os
 import sys
 import uuid
 import bcrypt
 from datetime import datetime, timezone
+from dotenv import load_dotenv
 from pymongo import MongoClient
 
-MONGO_URI   = "mongodb+srv://dental-ai:Please12@dental-ai.nfsibx.mongodb.net/?appName=dental-ai"
+# Load .env from the backend directory (works whether the script is run from
+# backend/ or from the repo root).
+_here = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(_here, "..", ".env"))
+
+MONGO_URI   = os.environ.get("MONGODB_URI") or os.environ.get("MONGO_URL")
 DB_NAME     = "dental_ai"
 PRACTICE_ID = "practice-test-001"
+
+if not MONGO_URI:
+    print("ERROR: MONGODB_URI (or MONGO_URL) is not set.", file=sys.stderr)
+    sys.exit(1)
 
 EMAIL       = "admin@dentalai.test"
 PASSWORD    = "DentalAI2026!"
