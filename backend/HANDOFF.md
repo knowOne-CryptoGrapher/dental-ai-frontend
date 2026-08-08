@@ -138,6 +138,8 @@
   - Confirmed fix, same 7-file/102-test scope as last session's baseline: **54 passed / 4 failed / 44 errors → 74 passed / 5 failed / 23 errors.** Zero `"Invalid email or password"` failures anywhere (verified directly), including across the full ~470-test suite — the login gap is fully closed.
   - The 5th "failure" (`test_superadmin_plans_endpoint`) isn't a new regression — it's the same already-documented stale "3-tier world" assumption (see above), just newly visible now that its `super_token` fixture can actually log in instead of erroring out first.
   - Of the remaining 23 errors: 0 are login-related. 4 are rate-limiter self-collision from running many login-dependent modules back-to-back in one local `pytest` invocation (see Pending below — not a defect). The other 19 are two distinct, unrelated, pre-existing gaps that were simply hidden behind the login failure until now (also detailed in Pending below): `test_superadmin_re.py`'s onboarding-router-disabled 404 (12 tests), and `test_platform_console.py`'s missing-`province`-field 422 (7 tests).
+- **Founding Clinic simplified back to a single tier** — a Professional founding-clinic variant (`founding_clinic_professional`, $399/mo) was fully scoped and diff-reviewed this session but never written to disk (confirmed via `git status` before starting the revert — all 8 files were still untouched). It's cancelled, not deferred. The plan originally shipped as `founding_clinic` (commit `2e2fb1a4`, see above) is renamed to `founding_clinic_basic` — same $299/mo price, same features, same everything, just the id. `approve_founding_clinic` now hardcodes `subscription_plan: "founding_clinic_basic"` directly — no tier branching, since there's only one tier again. Two frontend improvements survive the cancellation: crossed-out regular-vs-founding pricing display on both `PricingPage.jsx` and `LandingPage.jsx` (the latter had zero founding-clinic wiring before this — built fresh), and the founding pricing/CTA now disappears entirely once combined spots hit 0 (previously fell back to a "waitlist open" state that stayed visible/clickable forever) — `FoundingClinicBanner.jsx` also auto-hides at 0 spots now, alongside its existing manual dismiss. Committed as `fb96cd03`, **not yet deployed**.
+  - Reran the same 7-file/102-test scope: 74 passed / 5 failed / 23 errors → **71 passed / 8 failed / 23 errors**. The 3 new failures are **not** caused by this change — confirmed via a direct Stripe API query that the `basic plan` and `professional plan` Stripe Products are currently `product.active=False` (enterprise/elite remain active), so `/billing/checkout` 502s for those two plans regardless of any code here. See Urgent below. The other 5 failures and all 23 errors are the exact same pre-existing issues already documented above (stale 3-tier-world test assumptions, onboarding-router-disabled 404s, missing-`province`-field 422s, rate-limiter self-collision).
 
 ### In Progress 🔄
 - Incorporation — BC Provincial, lawyer engaged, paperwork in progress
@@ -152,9 +154,10 @@
 - Marketing assets (demo video, onboarding PDF, outreach sequences)
 - Link a real phone number to the Retell agent in `settings.retell.phone_number` (currently unset in our DB even though the agent itself is provisioned)
 - Deploy the `update_patient` DuplicateKeyError fix (committed as `4e273090`, held per explicit instruction — see Done ✅)
-- Deploy the founding_clinic tier + real provisioning fix (committed as `2e2fb1a4`, held per explicit instruction — see Done ✅)
-- Fix Founding Clinic marketing copy: live copy says "$499 regular price / 40% off," actual Basic price in `plans.py` is $399 (~25% off). Pre-existing bug, found and deliberately left unfixed this session — needs a follow-up prompt.
-- Configure `STRIPE_PRICE_FOUNDING_CLINIC` (create a real recurring Stripe Price + set the env var). Without it, `create_checkout_session` silently falls back to a one-time charge instead of a real $299/mo subscription for founding_clinic accounts. Intentionally deferred — test-only software, single user, accepted risk for now.
+- Deploy the founding_clinic tier + real provisioning fix (committed as `2e2fb1a4`, held per explicit instruction — see Done ✅) and its follow-up rename to `founding_clinic_basic` (committed as `fb96cd03`, see Done ✅) — both batch together, deploy in one shot.
+- **STILL PENDING, NOT YET APPLIED — Basic/Professional pricing correction**: `plans.py`'s live `price_usd` values are still `basic=399.0`, `professional=599.0` (target: `499`/`699` — enterprise `999` and elite `1499` are already correct, no change needed there). This was scoped and fully diffed in an earlier discovery pass this session but explicitly never implemented — do not assume it landed alongside the founding-clinic work above, it did not. Once it does land, four independent hardcoded frontend copies also need updating (`PricingPage.jsx` ×2 arrays, `LandingPage.jsx`, `ComparePlansModal.js`, `OnboardingWizard.js` — none of them read from the API), plus the Basic/Professional Stripe Price *objects* themselves (`STRIPE_PRICE_BASIC`/`STRIPE_PRICE_PROFESSIONAL` currently charge $399/$599 in Stripe test mode regardless of what `plans.py` says — checkout uses the Stripe Price object's amount, not `plan.price_usd`).
+- Fix Founding Clinic marketing copy: `FoundingClinicModal.jsx` still says "$499 regular price / 40% off" — this will only become accurate once the pricing correction directly above actually lands (today's real Basic price is still $399, making the current copy ~25% off, not 40%). Pre-existing bug, found and deliberately left unfixed again this session.
+- Configure `STRIPE_PRICE_FOUNDING_CLINIC` (create a real recurring Stripe Price + set the env var — kept this exact env var name through the basic/professional-split-then-cancel, no rename needed now that there's only one founding tier). Without it, `create_checkout_session` silently falls back to a one-time charge instead of a real $299/mo subscription for founding_clinic_basic accounts. Intentionally deferred — test-only software, single user, accepted risk for now.
 - Click the verification link sent to `d9john5@gmail.com` for the new monitoring notification channel — alerts are silently inert until this is done
 - Fix cosmetic em-dash-to-`?` mangling in the error-rate alert policy's display name (functionality unaffected)
 - Minor pre-existing test bug (not introduced this session, confirmed via `git blame` + isolated worktree rerun to predate it by 3+ weeks, commit `608829c37` / 2026-07-13): `tests/test_patient_deduplication.py::test_book_appointment_dedup` fails with `TypeError: object MagicMock can't be used in 'await' expression` — the test's `db.appointments` mock never sets up `find_one` as an `AsyncMock`, but `book_appointment_realtime`'s double-booking conflict check (`retell_api_router.py`) calls `await db.appointments.find_one(...)`. Low priority, but worth a quick fix to keep the suite green.
@@ -178,22 +181,23 @@
 - Clinic service agreement signing
 
 ### Urgent ⚠️
-- None currently. MongoDB Atlas payment (previously flagged here as suspending 07/31/26) is reactivated — independently verified via a live connection check on 2026-08-07 (ping + query against `practices` succeeded, returned 4 documents). If this file goes stale again, re-verify with a direct connection check rather than trusting this line — that's exactly how the previous stale warning happened.
+- **Stripe checkout is currently broken for Basic and Professional** — discovered this session while verifying test failures were pre-existing (not assumed): the `basic plan` and `professional plan` Products in the Stripe test-mode account are `active=False` (verified via direct `stripe.Price.retrieve` API call), so any `/billing/checkout` call for those two plans 502s with `"Price ... is not available to be purchased because its product is not active"`. Enterprise and Elite Products are still active and checkout works fine for those. Unrelated to any code in this repo — this is a Stripe-dashboard-side state, needs reactivating there directly (Stripe Dashboard → Products → basic plan / professional plan → Activate). Given this is test-mode and pre-launch, not flagging as a customer-facing outage, but it will block anyone testing the Basic/Professional checkout flow until fixed.
+- None otherwise. MongoDB Atlas payment (previously flagged here as suspending 07/31/26) is reactivated — independently verified via a live connection check on 2026-08-07 (ping + query against `practices` succeeded, returned 4 documents). If this file goes stale again, re-verify with a direct connection check rather than trusting this line — that's exactly how the previous stale warning happened.
 
 ---
 
 ## Recent Commits (Last 10)
 ```
+fb96cd03 refactor(founding-clinic): simplify to single Basic-only tier, drop professional variant
+e4c6cce9 test(fixtures): add idempotent seed script for owner@dentalai.com / admin@dentaltest.com
+63e42c2e docs: update HANDOFF.md
+faa1f800 docs: update HANDOFF.md
 2e2fb1a4 feat(founding-clinic): provision real practice on approval, add founding_clinic plan tier with insurance preview flag
 aed40a74 docs: update HANDOFF.md
 477a33b0 docs: update HANDOFF.md
 4e273090 fix(patients): catch DuplicateKeyError on update_patient, return 409
 756a2924 docs: add living HANDOFF.md for session continuity
 2de0bbde feat(founding-clinic): soft launch modal, banner, and admin review queue
-0eb42c33 fix(patients): add normalized_phone to staff-created patients + catch DuplicateKeyError
-33b7654e fix: standardize frontend URL defaults to frontdeskdentalai.com
-09dd6cfc fix: replace emergent.sh placeholder URLs with real backend URL
-44e318db fix(superadmin): replace emergent.sh placeholder URL with real backend URL
 ```
 
 ---
