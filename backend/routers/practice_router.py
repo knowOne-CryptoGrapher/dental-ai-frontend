@@ -9,7 +9,7 @@ from auth import (
     get_db, get_current_user, require_role, require_practice_access,
     require_practice_scope, log_audit_event, create_access_token,
 )
-from plans import enforce_plan_limit
+from plans import enforce_plan_limit, SELF_SERVE_TIERS_ENABLED
 from regions.region_config import derive_region, DB_CLUSTER_LABELS, COMPUTE_REGION_LABELS
 from config import TERMS_VERSION, PRIVACY_POLICY_VERSION
 
@@ -61,8 +61,6 @@ async def get_practice_meta(
 
 # ==== ONBOARDING PRACTICE ENDPOINTS ====
 
-_VALID_PLANS = {"basic", "professional", "enterprise", "elite"}
-
 
 @router.post("/practices")
 async def create_practice_onboarding(
@@ -73,11 +71,12 @@ async def create_practice_onboarding(
     Create a new practice for the authenticated user during onboarding.
     Issues a refreshed JWT that contains the new practice_id.
     """
-    if not data.plan or data.plan not in _VALID_PLANS:
+    if not data.plan or data.plan not in SELF_SERVE_TIERS_ENABLED:
         raise HTTPException(
             status_code=400,
-            detail=f"A valid subscription plan is required. "
-                   f"Must be one of: {', '.join(sorted(_VALID_PLANS))}",
+            detail=f"Self-serve signup is currently limited to: "
+                   f"{', '.join(sorted(SELF_SERVE_TIERS_ENABLED))}. "
+                   f"Contact sales for other plans.",
         )
 
     submitted_terms = data.accepted_terms_version or ""

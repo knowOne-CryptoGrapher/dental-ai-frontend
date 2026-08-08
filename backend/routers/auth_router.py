@@ -8,7 +8,7 @@ from auth import (
     get_db, hash_password, verify_password, create_access_token,
     get_current_user, require_role, log_audit_event, log_security_event,
 )
-from plans import enforce_plan_limit
+from plans import enforce_plan_limit, SELF_SERVE_TIERS_ENABLED
 from utils.rate_limiter import limiter
 
 logger = logging.getLogger(__name__)
@@ -87,6 +87,11 @@ async def signup(request: Request, data: SignupRequest):
 async def register(request: Request, data: UserRegister):
     """Register a new practice admin (creates practice + admin user)"""
     try:
+        if "basic" not in SELF_SERVE_TIERS_ENABLED:
+            raise HTTPException(
+                status_code=400,
+                detail="Self-serve signup is currently unavailable. Contact sales to get started.",
+            )
         db = get_db()
         if await db.users.find_one({"email": data.email}):
             raise HTTPException(status_code=400, detail="Email already registered")

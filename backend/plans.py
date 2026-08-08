@@ -193,6 +193,15 @@ PLANS: dict[str, Plan] = {
 
 DEFAULT_PLAN_ID = "basic"
 
+# Self-serve NEW-account signup gate — which plan ids can be chosen at
+# registration today. Independent of PLANS (all plans that structurally
+# exist) and Plan.public (billing-page upgrade visibility for existing
+# customers) — this only governs brand-new self-serve signups. Superadmin
+# manual assignment, founding-clinic provisioning, and billing-page upgrades
+# all bypass this entirely. Expand as tiers open up (e.g. once ITRANS/CDAnet
+# clears): {"basic", "professional", "enterprise", "elite"}.
+SELF_SERVE_TIERS_ENABLED: set[str] = {"basic"}
+
 
 # ──────────────────────────────────────────────────────────────────────
 # Helpers
