@@ -139,12 +139,27 @@ export default function LandingPage() {
   const [salesModal, setSalesModal] = useState({ open: false, plan: 'enterprise' });
   const [foundingModalOpen, setFoundingModalOpen] = useState(false);
   const [foundingSpots, setFoundingSpots] = useState(null);
+  const [selfServeTiers, setSelfServeTiers] = useState({}); // locked-by-default until loaded
 
   useEffect(() => {
     let cancelled = false;
     fetch(`${API_BASE_URL}/api/sales/founding-clinic-count`)
       .then(res => res.json())
       .then(data => { if (!cancelled) setFoundingSpots(data.spots_remaining); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_BASE_URL}/api/billing/plans`)
+      .then(res => res.json())
+      .then(data => {
+        if (cancelled) return;
+        const map = {};
+        data.forEach(p => { map[p.id] = p.self_serve_enabled; });
+        setSelfServeTiers(map);
+      })
       .catch(() => {});
     return () => { cancelled = true; };
   }, []);
@@ -374,6 +389,7 @@ export default function LandingPage() {
                 foundingRegularPrice={plan.id === 'basic' ? FOUNDING_BASIC_PRICE.regular : undefined}
                 foundingSpotsRemaining={plan.id === 'basic' ? foundingSpots : null}
                 onFoundingClick={plan.id === 'basic' ? () => setFoundingModalOpen(true) : undefined}
+                comingSoon={plan.id === 'professional' && selfServeTiers[plan.id] !== true}
               />
             ))}
           </div>

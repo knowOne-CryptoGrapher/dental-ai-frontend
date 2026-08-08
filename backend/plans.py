@@ -90,6 +90,7 @@ class Plan:
             "features": asdict(self.features),
             "recurring": bool(self.stripe_price_id),
             "sort_order": self.sort_order,
+            "self_serve_enabled": self.id in SELF_SERVE_TIERS_ENABLED,
         }
 
 

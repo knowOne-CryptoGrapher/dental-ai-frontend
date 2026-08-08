@@ -5,6 +5,7 @@ import { Check } from 'lucide-react';
 export default function PricingPreviewCard({
   name, price, badge, features, ctaLabel, ctaHref, onCtaClick, isElite, isPopular, compliance,
   foundingPrice, foundingRegularPrice, foundingSpotsRemaining, onFoundingClick,
+  comingSoon,
 }) {
   const useAnchor = ctaHref?.startsWith('mailto:') || ctaHref?.startsWith('/contact-sales');
   const showFounding = Boolean(foundingPrice) && foundingSpotsRemaining !== null && foundingSpotsRemaining > 0;
@@ -29,7 +30,11 @@ export default function PricingPreviewCard({
 
   return (
     <div className={cardClass} style={cardStyle}>
-      {badge && (
+      {comingSoon ? (
+        <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap bg-slate-400 text-white">
+          Coming Soon
+        </span>
+      ) : badge && (
         <span
           className={`absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${isElite ? 'text-white' : 'bg-teal-600 text-white'}`}
           style={isElite ? { backgroundColor: '#D4AF37' } : {}}
@@ -69,7 +74,14 @@ export default function PricingPreviewCard({
         ))}
       </ul>
 
-      {onCtaClick ? (
+      {comingSoon ? (
+        <span
+          aria-disabled="true"
+          className="block text-center py-2.5 px-4 rounded-md text-sm font-semibold bg-slate-100 text-slate-400 cursor-not-allowed select-none"
+        >
+          Coming Soon
+        </span>
+      ) : onCtaClick ? (
         <button type="button" onClick={onCtaClick} className={ctaClass} style={ctaStyle}>
           {ctaLabel}
         </button>

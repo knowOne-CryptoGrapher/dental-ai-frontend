@@ -173,11 +173,15 @@ function Cell({ value, isEliteCol }) {
   );
 }
 
-function PlanCard({ plan, onCtaClick, onFoundingClick, foundingSpotsRemaining }) {
+function PlanCard({ plan, onCtaClick, onFoundingClick, foundingSpotsRemaining, selfServeEnabled }) {
   const fKey = PLAN_FEATURE_KEY[plan.id];
   const useAnchor = plan.ctaHref?.startsWith('mailto:') || plan.ctaHref?.startsWith('/contact-sales');
   const isBasic = plan.id === 'basic';
   const showFounding = isBasic && foundingSpotsRemaining !== null && foundingSpotsRemaining > 0;
+  // Only Professional is gated by self-serve availability. Enterprise/Elite
+  // keep their existing Contact Sales CTA regardless — that's a separate,
+  // permanent, human-mediated path, unrelated to self-serve tier lockdown.
+  const isComingSoon = plan.id === 'professional' && !selfServeEnabled;
 
   const cardBorder = plan.isElite
     ? {}
@@ -196,7 +200,11 @@ function PlanCard({ plan, onCtaClick, onFoundingClick, foundingSpotsRemaining })
       className={`bg-white rounded-xl p-6 flex flex-col shadow-sm relative ${typeof cardBorder === 'string' ? cardBorder : ''}`}
       style={plan.isElite ? { border: '2px solid #D4AF37' } : {}}
     >
-      {plan.badge && (
+      {isComingSoon ? (
+        <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap bg-slate-400 text-white">
+          Coming Soon
+        </span>
+      ) : plan.badge && (
         <span
           className={`absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${plan.isElite ? 'text-white' : 'bg-teal-600 text-white'}`}
           style={plan.isElite ? { backgroundColor: '#D4AF37' } : {}}
@@ -261,7 +269,14 @@ function PlanCard({ plan, onCtaClick, onFoundingClick, foundingSpotsRemaining })
         })}
       </ul>
 
-      {onCtaClick ? (
+      {isComingSoon ? (
+        <span
+          aria-disabled="true"
+          className="block text-center py-2.5 px-4 rounded-md text-sm font-semibold bg-slate-100 text-slate-400 cursor-not-allowed select-none"
+        >
+          Coming Soon
+        </span>
+      ) : onCtaClick ? (
         <button type="button" onClick={onCtaClick} className={ctaCls} style={plan.isElite ? { backgroundColor: '#D4AF37' } : {}}>
           {plan.ctaLabel}
         </button>
@@ -299,12 +314,27 @@ export default function PricingPage() {
   const [salesModal, setSalesModal] = useState({ open: false, plan: 'enterprise' });
   const [foundingModalOpen, setFoundingModalOpen] = useState(false);
   const [foundingSpots, setFoundingSpots] = useState(null);
+  const [selfServeTiers, setSelfServeTiers] = useState({}); // locked-by-default until loaded
 
   useEffect(() => {
     let cancelled = false;
     fetch(`${API_BASE_URL}/api/sales/founding-clinic-count`)
       .then(res => res.json())
       .then(data => { if (!cancelled) setFoundingSpots(data.spots_remaining); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_BASE_URL}/api/billing/plans`)
+      .then(res => res.json())
+      .then(data => {
+        if (cancelled) return;
+        const map = {};
+        data.forEach(p => { map[p.id] = p.self_serve_enabled; });
+        setSelfServeTiers(map);
+      })
       .catch(() => {});
     return () => { cancelled = true; };
   }, []);
@@ -355,6 +385,7 @@ export default function PricingPage() {
                 }
                 onFoundingClick={plan.id === 'basic' ? () => setFoundingModalOpen(true) : undefined}
                 foundingSpotsRemaining={plan.id === 'basic' ? foundingSpots : null}
+                selfServeEnabled={selfServeTiers[plan.id] === true}
               />
             ))}
           </div>

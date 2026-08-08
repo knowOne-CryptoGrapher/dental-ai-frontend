@@ -169,6 +169,10 @@ export default function OnboardingWizard({ mode = 'signup' }) {
   // The committed plan sent to POST /practices
   const [selectedPlan, setSelectedPlan] = useState(searchParams.get('plan') || '');
 
+  // Live self-serve availability per plan id, from the same SELF_SERVE_TIERS_ENABLED
+  // source of truth as plans.py / PricingPage.jsx — null until loaded.
+  const [selfServeTiers, setSelfServeTiers] = useState(null);
+
   const [signup, setSignup] = useState({
     practice_name: '',
     province: '',
@@ -235,6 +239,39 @@ export default function OnboardingWizard({ mode = 'signup' }) {
       setStep(Math.min(practice.onboarding_step, STEPS.length - 1));
     }
   }, [practice?.onboarding_step, mode]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/billing/plans')
+      .then((res) => {
+        if (cancelled) return;
+        const map = {};
+        res.data.forEach((p) => { map[p.id] = p.self_serve_enabled; });
+        setSelfServeTiers(map);
+      })
+      .catch(() => { if (!cancelled) setSelfServeTiers({}); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Catch a locked plan as early as possible — whether pre-selected via a
+  // direct ?plan= URL or chosen from this wizard's own plan step — instead
+  // of letting the whole form get filled out and hitting the 400 from
+  // POST /practices at the very end. Deliberately NOT scoped to Professional
+  // only (unlike the Step 2 grid's visual lock below) — SELF_SERVE_TIERS_ENABLED
+  // blocks any non-basic plan server-side today, including enterprise/elite if
+  // someone lands here via a direct ?plan=enterprise URL bypassing Contact
+  // Sales entirely, so this safety net stays general to catch all of them.
+  useEffect(() => {
+    if (mode === 'resume') return;             // existing practices are never re-validated
+    if (!selectedPlan) return;                  // nothing selected yet
+    if (selfServeTiers === null) return;         // availability not loaded yet
+    if (selfServeTiers[selectedPlan] !== true) {
+      toast.error(
+        `${selectedPlan.charAt(0).toUpperCase()}${selectedPlan.slice(1)} isn't open for self-serve signup yet. Contact sales to get started.`
+      );
+      navigate('/pricing');
+    }
+  }, [mode, selectedPlan, selfServeTiers, navigate]);
 
   const next = () => setStep((s) => Math.min(s + 1, STEPS.length - 1));
   const back = () => setStep((s) => Math.max(s - 1, 0));
@@ -649,21 +686,32 @@ export default function OnboardingWizard({ mode = 'signup' }) {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {WIZARD_PLANS.map((plan) => {
+                // Only Professional is gated by self-serve availability.
+                // Enterprise/Elite keep their existing Contact Sales click
+                // regardless — a separate, permanent, human-mediated path.
+                const isLocked = plan.id === 'professional' && selfServeTiers?.[plan.id] !== true;
                 const salesGated = requiresContactSales(plan.id);
-                const isSelected = !salesGated && selectedPlan === plan.id;
+                const isSelected = !salesGated && !isLocked && selectedPlan === plan.id;
                 return (
                   <div
                     key={plan.id}
+                    aria-disabled={isLocked}
                     className={[
-                      'relative rounded-xl p-5 cursor-pointer transition-all',
-                      isSelected
+                      'relative rounded-xl p-5 transition-all',
+                      isLocked
+                        ? 'cursor-not-allowed opacity-60 border border-slate-200 bg-slate-50'
+                        : 'cursor-pointer',
+                      !isLocked && isSelected
                         ? plan.isElite
                           ? 'bg-yellow-50/60'
                           : 'border-2 border-teal-600 bg-teal-50/40'
-                        : 'border border-slate-200 bg-white hover:border-slate-300',
+                        : !isLocked
+                        ? 'border border-slate-200 bg-white hover:border-slate-300'
+                        : '',
                     ].join(' ')}
-                    style={isSelected && plan.isElite ? { border: '2px solid #D4AF37' } : {}}
+                    style={!isLocked && isSelected && plan.isElite ? { border: '2px solid #D4AF37' } : {}}
                     onClick={() => {
+                      if (isLocked) return;
                       if (salesGated) {
                         navigate(`/contact-sales?plan=${plan.id}`);
                       } else {
@@ -671,7 +719,11 @@ export default function OnboardingWizard({ mode = 'signup' }) {
                       }
                     }}
                   >
-                    {plan.badge && (
+                    {isLocked ? (
+                      <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap bg-slate-400 text-white">
+                        Coming Soon
+                      </span>
+                    ) : plan.badge && (
                       <span
                         className={`absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${
                           plan.isElite ? 'text-white' : 'bg-teal-600 text-white'
@@ -686,17 +738,17 @@ export default function OnboardingWizard({ mode = 'signup' }) {
                       <div>
                         <h3
                           className={`font-bold text-base ${
-                            plan.isElite ? 'text-[#b8962f]' : 'text-slate-900'
+                            isLocked ? 'text-slate-400' : plan.isElite ? 'text-[#b8962f]' : 'text-slate-900'
                           }`}
                         >
                           {plan.name}
                         </h3>
                         <div className="flex items-baseline gap-1 mt-0.5">
-                          <span className="text-xl font-bold text-slate-900">{plan.price}</span>
+                          <span className={`text-xl font-bold ${isLocked ? 'text-slate-400' : 'text-slate-900'}`}>{plan.price}</span>
                           <span className="text-xs text-slate-500">/mo</span>
                         </div>
                       </div>
-                      {salesGated ? (
+                      {isLocked ? null : salesGated ? (
                         <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 border border-slate-300 rounded-full px-2 py-1 shrink-0">
                           Contact Sales
                         </span>
@@ -712,10 +764,10 @@ export default function OnboardingWizard({ mode = 'signup' }) {
 
                     <ul className="space-y-1">
                       {plan.limits.map((limit) => (
-                        <li key={limit} className="flex items-center gap-2 text-sm text-slate-600">
+                        <li key={limit} className={`flex items-center gap-2 text-sm ${isLocked ? 'text-slate-400' : 'text-slate-600'}`}>
                           <Check
                             className={`w-3.5 h-3.5 shrink-0 ${
-                              plan.isElite ? 'text-[#D4AF37]' : 'text-teal-500'
+                              isLocked ? 'text-slate-300' : plan.isElite ? 'text-[#D4AF37]' : 'text-teal-500'
                             }`}
                           />
                           {limit}
