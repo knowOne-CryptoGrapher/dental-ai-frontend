@@ -16,12 +16,28 @@ by the "testpractice-" name prefix.
 """
 import json
 import os
+import sys
 import time
 import uuid
 import bcrypt
 import httpx
 import pytest
 from pymongo import MongoClient
+
+# `backend/retell/` is an unrelated local package (prompt_renderer.py,
+# retell_sync_service.py) that happens to share its name with the pip-
+# installed `retell` SDK. When the test runner puts backend/ on sys.path
+# (e.g. `python -m pytest` invoked from backend/, per this suite's own
+# documented usage), the local package can shadow the real SDK and break
+# `retell.lib` imports. Force the venv's site-packages to the front of
+# sys.path, and evict any already-cached wrong module, so the real SDK
+# always wins regardless of invocation style.
+_venv_site_packages = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "venv", "Lib", "site-packages")
+if os.path.isdir(_venv_site_packages) and _venv_site_packages not in sys.path:
+    sys.path.insert(0, _venv_site_packages)
+if "retell" in sys.modules and not hasattr(sys.modules["retell"], "lib"):
+    del sys.modules["retell"]
+
 from retell.lib.webhook_auth import symmetric as _retell_symmetric
 
 # ── Config ─────────────────────────────────────────────────────────────
@@ -108,8 +124,15 @@ def _login(email: str, password: str) -> dict:
 
 # ── Practice factory ────────────────────────────────────────────────────
 
-def create_practice(slug: str | None = None) -> dict:
-    """Insert a practice document and return a context dict."""
+def create_practice(slug: str | None = None, plan: str = "basic") -> dict:
+    """Insert a practice document and return a context dict.
+
+    `plan` bypasses the self-serve API's SELF_SERVE_TIERS_ENABLED gate
+    (currently basic-only) — use this to set up a professional/enterprise/
+    elite practice for tests that need to exercise plan-gated features
+    directly, without going through the (deliberately blocked) self-serve
+    signup flow for those tiers.
+    """
     slug = slug or _uid("testpractice-")
     practice_id = str(uuid.uuid4())
     doc = {
@@ -118,7 +141,7 @@ def create_practice(slug: str | None = None) -> dict:
         "contact_email": f"admin@{slug}.local",
         "status": "active",
         "billing_status": "active",
-        "subscription_plan": "basic",
+        "subscription_plan": plan,
         "default_timezone": "America/Toronto",
         "default_retention_years": 7,
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
