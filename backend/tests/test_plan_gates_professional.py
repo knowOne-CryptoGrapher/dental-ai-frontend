@@ -1,10 +1,14 @@
 """
 E2E plan gate test — Professional plan.
 
-Verifies that a Professional-plan practice:
-  - Can access Professional+ features (analytics, insurance)
-  - Is blocked from Enterprise+ features (knowledge_base, routing_rules)
-  - Is blocked from Elite features (baa)
+Verifies:
+  - Self-serve signup for a Professional-plan practice is blocked (400),
+    per the SELF_SERVE_TIERS_ENABLED lockdown (self-serve is basic-only).
+  - A Professional-plan practice, created directly via DB (bypassing the
+    now-blocked self-serve path — same conftest.create_practice/create_user
+    pattern used elsewhere in this suite), can access Professional+
+    features (analytics, insurance) and is blocked from Enterprise+
+    features (knowledge_base, routing_rules) and Elite features (baa).
 
 Environment variables required:
   TEST_API_URL  — must be set explicitly; refuses to default to production
@@ -14,28 +18,9 @@ import uuid
 from datetime import datetime, timezone
 
 import httpx
-import pymongo
 import pytest
 
-_mongo_uri = os.environ.get("MONGODB_URI") or os.environ.get("MONGO_URL") or ""
-_db_name = os.environ.get("DATABASE_NAME") or os.environ.get("DB_NAME") or "dental_ai"
-
-_CLEANUP_COLLECTIONS = (
-    "users", "providers", "patients", "appointments",
-    "invite_tokens", "ai_safety_logs", "audit_logs",
-)
-
-
-def _cleanup_practice(practice_id: str) -> None:
-    if not _mongo_uri:
-        return
-    mc = pymongo.MongoClient(_mongo_uri, serverSelectionTimeoutMS=5_000)
-    db = mc[_db_name]
-    for coll in _CLEANUP_COLLECTIONS:
-        db[coll].delete_many({"practice_id": practice_id})
-    db.practices.delete_one({"id": practice_id})
-    mc.close()
-
+from .conftest import create_practice, create_user, cleanup_practice
 
 _raw_api_url = os.environ.get("TEST_API_URL", "").strip()
 if not _raw_api_url:
@@ -73,7 +58,9 @@ def client():
 
 @pytest.fixture(scope="module")
 def signup_result(client):
-    """Step 1 — create admin user account (no practice yet)."""
+    """Self-serve signup (user account only, no practice) — unaffected by
+    the self-serve tier lockdown, still works normally for basic-eligible
+    signups. Used here only to exercise the blocked-upgrade path below."""
     email = _random_email()
     r = client.post("/api/auth/signup", json={
         "email": email,
@@ -89,49 +76,15 @@ def signup_result(client):
 
 
 @pytest.fixture(scope="module")
-def practice_result(client, signup_result):
-    """Step 2 — create Professional practice, get new JWT with practice_id."""
-    r = client.post(
-        "/api/practices",
-        json={
-            "name": "Professional Test Clinic",
-            "province": "BC",
-            "timezone": "America/Vancouver",
-            "plan": "professional",
-            "accepted_terms_version": TERMS_VERSION,
-            "accepted_privacy_version": PRIVACY_VERSION,
-            "accepted_at": datetime.now(timezone.utc).isoformat(),
-        },
-        headers=_headers(signup_result["token"]),
-    )
-    _assert_ok(r, "create-practice")
-    data = r.json()
-    assert "access_token" in data, f"create-practice: no access_token in {data}"
-    practice = data["practice"]
-    assert practice["subscription_plan"] == "professional"
-    assert practice["status"] == "onboarding"
-    assert "id" in practice
-    result = {
-        "token": data["access_token"],
-        "practice_id": practice["id"],
-        "practice": practice,
-    }
-    yield result
-    _cleanup_practice(result["practice_id"])
-
-
-@pytest.fixture(scope="module")
-def completed_result(client, practice_result):
-    """Step 3 — complete onboarding."""
-    practice_id = practice_result["practice_id"]
-    r = client.post(
-        f"/api/practices/{practice_id}/complete-onboarding",
-        headers=_headers(practice_result["token"]),
-    )
-    _assert_ok(r, "complete-onboarding")
-    data = r.json()
-    assert data.get("success") is True, f"complete-onboarding: expected success=true, got {data}"
-    return data
+def professional_env():
+    """A real Professional-plan practice + admin, created directly via DB.
+    The self-serve HTTP path for this tier is deliberately blocked (see
+    test_self_serve_professional_signup_blocked below), so plan-gate
+    coverage is exercised against a DB-seeded practice instead."""
+    practice = create_practice("plan-gate-professional", plan="professional")
+    admin = create_user(practice, "admin")
+    yield {"practice": practice, "admin": admin}
+    cleanup_practice(practice["practice_id"])
 
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
@@ -145,57 +98,69 @@ class TestProfessionalPlanGates:
     def test_signup_no_practice_yet(self, signup_result):
         assert signup_result["user"]["practice_id"] is None
 
-    def test_practice_created_with_professional_plan(self, practice_result):
-        assert practice_result["practice"]["subscription_plan"] == "professional"
+    def test_self_serve_professional_signup_blocked(self, client, signup_result):
+        """POST /api/practices with plan=professional must be rejected —
+        self-serve is currently limited to basic (SELF_SERVE_TIERS_ENABLED)."""
+        r = client.post(
+            "/api/practices",
+            json={
+                "name": "Should Not Be Created",
+                "province": "BC",
+                "timezone": "America/Vancouver",
+                "plan": "professional",
+                "accepted_terms_version": TERMS_VERSION,
+                "accepted_privacy_version": PRIVACY_VERSION,
+                "accepted_at": datetime.now(timezone.utc).isoformat(),
+            },
+            headers=_headers(signup_result["token"]),
+        )
+        assert r.status_code == 400, (
+            f"Expected 400 for self-serve professional signup, got {r.status_code}. {r.text}"
+        )
+        assert "Self-serve signup is currently limited to" in r.text
 
-    def test_practice_id_in_new_token(self, client, practice_result):
-        """New JWT from POST /api/practices must encode practice_id."""
-        r = client.get("/api/auth/me", headers=_headers(practice_result["token"]))
-        data = _assert_ok(r, "auth/me after create-practice")
-        assert data["practice_id"] == practice_result["practice_id"]
+    def test_practice_created_with_professional_plan(self, professional_env):
+        assert professional_env["practice"]["doc"]["subscription_plan"] == "professional"
 
-    def test_onboarding_complete(self, completed_result):
-        assert completed_result["success"] is True
-        assert "onboarding_completed_at" in completed_result
-
-    def test_auth_me_after_complete(self, client, practice_result, completed_result):
-        r = client.get("/api/auth/me", headers=_headers(practice_result["token"]))
-        data = _assert_ok(r, "auth/me after onboarding complete")
-        assert data["practice_id"] == practice_result["practice_id"]
+    def test_admin_has_practice_context(self, client, professional_env):
+        """DB-seeded admin's JWT/session correctly reflects the practice and role."""
+        r = client.get("/api/auth/me", headers=_headers(professional_env["admin"]["token"]))
+        data = _assert_ok(r, "auth/me")
+        assert data["practice_id"] == professional_env["practice"]["practice_id"]
         assert data.get("role") == "admin"
 
-    def test_professional_analytics_allowed(self, client, practice_result, completed_result):
+    def test_professional_analytics_allowed(self, client, professional_env):
         """GET /api/analytics/dashboard — Professional+ feature, must return 200."""
-        r = client.get("/api/analytics/dashboard", headers=_headers(practice_result["token"]))
+        r = client.get("/api/analytics/dashboard", headers=_headers(professional_env["admin"]["token"]))
         assert r.status_code == 200, (
             f"Expected 200 for analytics on Professional plan, got {r.status_code} — "
             f"plan gate may be over-blocking. {r.text}"
         )
 
-    def test_professional_insurance_allowed(self, client, practice_result, completed_result):
+    def test_professional_insurance_allowed(self, client, professional_env):
         """GET /api/insurance/claims — Professional+ feature, must return 200."""
-        r = client.get("/api/insurance/claims", headers=_headers(practice_result["token"]))
+        r = client.get("/api/insurance/claims", headers=_headers(professional_env["admin"]["token"]))
         assert r.status_code == 200, (
             f"Expected 200 for insurance on Professional plan, got {r.status_code}. {r.text}"
         )
 
-    def test_professional_gate_knowledge_blocked(self, client, practice_result, completed_result):
-        """GET /api/knowledge — gated on knowledge_base (Enterprise+), must be 403."""
-        r = client.get("/api/knowledge", headers=_headers(practice_result["token"]))
+    def test_professional_gate_knowledge_blocked(self, client, professional_env):
+        """GET /api/knowledge — gated on knowledge_base (Enterprise+), must be 402."""
+        r = client.get("/api/knowledge", headers=_headers(professional_env["admin"]["token"]))
         assert r.status_code == 402, (
             f"Expected 402 for knowledge on Professional plan, got {r.status_code}. {r.text}"
         )
 
-    def test_professional_gate_routing_rules_blocked(self, client, practice_result, completed_result):
-        """GET /api/routing-rules — gated on custom_routing_rules (Enterprise+), must be 403."""
-        r = client.get("/api/routing-rules", headers=_headers(practice_result["token"]))
+    def test_professional_gate_routing_rules_blocked(self, client, professional_env):
+        """GET /api/routing-rules — gated on custom_routing_rules (Enterprise+), must be 402."""
+        r = client.get("/api/routing-rules", headers=_headers(professional_env["admin"]["token"]))
         assert r.status_code == 402, (
             f"Expected 402 for routing-rules on Professional plan, got {r.status_code}. {r.text}"
         )
 
-    def test_professional_gate_baa_blocked(self, client, practice_result, completed_result):
-        """GET /api/billing/baa — gated on baa_available (Elite only), must be 403."""
-        r = client.get("/api/billing/baa", headers=_headers(practice_result["token"]))
+    def test_professional_gate_baa_blocked(self, client, professional_env):
+        """GET /api/billing/baa — gated on baa_available (Elite only), must be 402."""
+        r = client.get("/api/billing/baa", headers=_headers(professional_env["admin"]["token"]))
         assert r.status_code == 402, (
             f"Expected 402 for billing/baa on Professional plan, got {r.status_code}. {r.text}"
         )

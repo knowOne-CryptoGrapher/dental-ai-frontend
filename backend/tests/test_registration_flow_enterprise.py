@@ -1,14 +1,13 @@
 """
 E2E registration + onboarding flow test — Enterprise plan.
 
-Uses the REAL onboarding API (not the deprecated wizard shims):
-  1. POST /api/auth/signup          — create admin user (no practice yet)
-  2. POST /api/practices            — create practice, select enterprise plan, get new JWT
-  3. POST /api/practices/{id}/complete-onboarding — mark onboarding done
-  4. GET  /api/auth/me              — confirm user has practice_id
-  5. GET  /api/settings/voice       — enterprise gate: custom_voice
-  6. GET  /api/knowledge            — enterprise gate: knowledge_base
-  7. GET  /api/routing-rules        — enterprise gate: custom_routing_rules
+Verifies:
+  - Self-serve signup for an Enterprise-plan practice is blocked (400),
+    per the SELF_SERVE_TIERS_ENABLED lockdown (self-serve is basic-only).
+  - An Enterprise-plan practice, created directly via DB (bypassing the
+    now-blocked self-serve path — same conftest.create_practice/create_user
+    pattern used elsewhere in this suite), can access enterprise-gated
+    features: custom_voice, knowledge_base, custom_routing_rules.
 
 Environment variables required:
   TEST_API_URL  — must be set explicitly; refuses to default to production
@@ -18,27 +17,9 @@ import uuid
 from datetime import datetime, timezone
 
 import httpx
-import pymongo
 import pytest
 
-_mongo_uri = os.environ.get("MONGODB_URI") or os.environ.get("MONGO_URL") or ""
-_db_name = os.environ.get("DATABASE_NAME") or os.environ.get("DB_NAME") or "dental_ai"
-
-_CLEANUP_COLLECTIONS = (
-    "users", "providers", "patients", "appointments",
-    "invite_tokens", "ai_safety_logs", "audit_logs",
-)
-
-
-def _cleanup_practice(practice_id: str) -> None:
-    if not _mongo_uri:
-        return
-    mc = pymongo.MongoClient(_mongo_uri, serverSelectionTimeoutMS=5_000)
-    db = mc[_db_name]
-    for coll in _CLEANUP_COLLECTIONS:
-        db[coll].delete_many({"practice_id": practice_id})
-    db.practices.delete_one({"id": practice_id})
-    mc.close()
+from .conftest import create_practice, create_user, cleanup_practice
 
 _raw_api_url = os.environ.get("TEST_API_URL", "").strip()
 if not _raw_api_url:
@@ -78,7 +59,9 @@ def client():
 
 @pytest.fixture(scope="module")
 def signup_result(client):
-    """Step 1 — create admin user account (no practice yet)."""
+    """Self-serve signup (user account only, no practice) — unaffected by
+    the self-serve tier lockdown. Used here only to exercise the blocked-
+    upgrade path below."""
     email = _random_email()
     r = client.post("/api/auth/signup", json={
         "email": email,
@@ -94,49 +77,15 @@ def signup_result(client):
 
 
 @pytest.fixture(scope="module")
-def practice_result(client, signup_result):
-    """Step 2 — create Enterprise practice, get new JWT with practice_id."""
-    r = client.post(
-        "/api/practices",
-        json={
-            "name": "Enterprise Test Clinic",
-            "province": "BC",
-            "timezone": "America/Vancouver",
-            "plan": "enterprise",
-            "accepted_terms_version": TERMS_VERSION,
-            "accepted_privacy_version": PRIVACY_VERSION,
-            "accepted_at": datetime.now(timezone.utc).isoformat(),
-        },
-        headers=_headers(signup_result["token"]),
-    )
-    _assert_ok(r, "create-practice")
-    data = r.json()
-    assert "access_token" in data, f"create-practice: no access_token in {data}"
-    practice = data["practice"]
-    assert practice["subscription_plan"] == "enterprise"
-    assert practice["status"] == "onboarding"
-    assert "id" in practice
-    result = {
-        "token": data["access_token"],
-        "practice_id": practice["id"],
-        "practice": practice,
-    }
-    yield result
-    _cleanup_practice(result["practice_id"])
-
-
-@pytest.fixture(scope="module")
-def completed_result(client, practice_result):
-    """Step 3 — complete onboarding, returns success + timestamp."""
-    practice_id = practice_result["practice_id"]
-    r = client.post(
-        f"/api/practices/{practice_id}/complete-onboarding",
-        headers=_headers(practice_result["token"]),
-    )
-    _assert_ok(r, "complete-onboarding")
-    data = r.json()
-    assert data.get("success") is True, f"complete-onboarding: expected success=true, got {data}"
-    return data
+def enterprise_env():
+    """A real Enterprise-plan practice + admin, created directly via DB.
+    The self-serve HTTP path for this tier is deliberately blocked (see
+    test_self_serve_enterprise_signup_blocked below), so plan-gate
+    coverage is exercised against a DB-seeded practice instead."""
+    practice = create_practice("plan-gate-enterprise", plan="enterprise")
+    admin = create_user(practice, "admin")
+    yield {"practice": practice, "admin": admin}
+    cleanup_practice(practice["practice_id"])
 
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
@@ -150,61 +99,73 @@ class TestEnterpriseRegistrationFlow:
     def test_signup_no_practice_yet(self, signup_result):
         assert signup_result["user"]["practice_id"] is None
 
-    def test_practice_created_with_enterprise_plan(self, practice_result):
-        assert practice_result["practice"]["subscription_plan"] == "enterprise"
+    def test_self_serve_enterprise_signup_blocked(self, client, signup_result):
+        """POST /api/practices with plan=enterprise must be rejected —
+        self-serve is currently limited to basic (SELF_SERVE_TIERS_ENABLED)."""
+        r = client.post(
+            "/api/practices",
+            json={
+                "name": "Should Not Be Created",
+                "province": "BC",
+                "timezone": "America/Vancouver",
+                "plan": "enterprise",
+                "accepted_terms_version": TERMS_VERSION,
+                "accepted_privacy_version": PRIVACY_VERSION,
+                "accepted_at": datetime.now(timezone.utc).isoformat(),
+            },
+            headers=_headers(signup_result["token"]),
+        )
+        assert r.status_code == 400, (
+            f"Expected 400 for self-serve enterprise signup, got {r.status_code}. {r.text}"
+        )
+        assert "Self-serve signup is currently limited to" in r.text
 
-    def test_practice_id_in_new_token(self, client, practice_result):
-        """New JWT from POST /api/practices must encode practice_id."""
-        r = client.get("/api/auth/me", headers=_headers(practice_result["token"]))
-        data = _assert_ok(r, "auth/me after create-practice")
-        assert data["practice_id"] == practice_result["practice_id"]
+    def test_practice_created_with_enterprise_plan(self, enterprise_env):
+        assert enterprise_env["practice"]["doc"]["subscription_plan"] == "enterprise"
 
-    def test_onboarding_complete(self, completed_result):
-        assert completed_result["success"] is True
-        assert "onboarding_completed_at" in completed_result
-
-    def test_auth_me_after_complete(self, client, practice_result, completed_result):
-        r = client.get("/api/auth/me", headers=_headers(practice_result["token"]))
-        data = _assert_ok(r, "auth/me after onboarding complete")
-        assert data["practice_id"] == practice_result["practice_id"]
+    def test_admin_has_practice_context(self, client, enterprise_env):
+        """DB-seeded admin's JWT/session correctly reflects the practice and role."""
+        r = client.get("/api/auth/me", headers=_headers(enterprise_env["admin"]["token"]))
+        data = _assert_ok(r, "auth/me")
+        assert data["practice_id"] == enterprise_env["practice"]["practice_id"]
         assert data.get("role") == "admin"
 
-    def test_enterprise_gate_voice(self, client, practice_result):
+    def test_enterprise_gate_voice(self, client, enterprise_env):
         """GET /api/settings/voice — gated on custom_voice (enterprise+)."""
-        r = client.get("/api/settings/voice", headers=_headers(practice_result["token"]))
+        r = client.get("/api/settings/voice", headers=_headers(enterprise_env["admin"]["token"]))
         assert r.status_code == 200, (
             f"Enterprise voice endpoint returned {r.status_code} — "
             f"plan gate may not be active or plan was not set correctly. {r.text}"
         )
 
-    def test_enterprise_gate_knowledge(self, client, practice_result):
+    def test_enterprise_gate_knowledge(self, client, enterprise_env):
         """GET /api/knowledge — gated on knowledge_base (enterprise+)."""
-        r = client.get("/api/knowledge", headers=_headers(practice_result["token"]))
+        r = client.get("/api/knowledge", headers=_headers(enterprise_env["admin"]["token"]))
         assert r.status_code == 200, (
             f"Enterprise knowledge endpoint returned {r.status_code}. {r.text}"
         )
 
-    def test_enterprise_gate_routing_rules(self, client, practice_result):
+    def test_enterprise_gate_routing_rules(self, client, enterprise_env):
         """GET /api/routing-rules — gated on custom_routing_rules (enterprise+)."""
-        r = client.get("/api/routing-rules", headers=_headers(practice_result["token"]))
+        r = client.get("/api/routing-rules", headers=_headers(enterprise_env["admin"]["token"]))
         assert r.status_code == 200, (
             f"Enterprise routing-rules endpoint returned {r.status_code}. {r.text}"
         )
 
-    def test_no_plan_gate_failures(self, client, practice_result):
+    def test_no_plan_gate_failures(self, client, enterprise_env):
         """None of the enterprise endpoints should return 402."""
         endpoints = ["/api/settings/voice", "/api/knowledge", "/api/routing-rules"]
-        h = _headers(practice_result["token"])
+        h = _headers(enterprise_env["admin"]["token"])
         for ep in endpoints:
             r = client.get(ep, headers=h)
             assert r.status_code != 402, (
                 f"{ep} returned 402 Payment Required — enterprise plan gate is blocking. {r.text}"
             )
 
-    def test_no_auth_failures(self, client, practice_result):
+    def test_no_auth_failures(self, client, enterprise_env):
         """None of the enterprise endpoints should return 401 or 403."""
         endpoints = ["/api/settings/voice", "/api/knowledge", "/api/routing-rules"]
-        h = _headers(practice_result["token"])
+        h = _headers(enterprise_env["admin"]["token"])
         for ep in endpoints:
             r = client.get(ep, headers=h)
             assert r.status_code not in (401, 403), (
