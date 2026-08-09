@@ -7,7 +7,7 @@ Covers:
   • Per-call cache (set/get/expire/end-call)
   • /api/llm/route endpoint (no auth)
   • /api/llm/providers endpoint
-  • /api/llm/chat/completions (streaming, stub provider)
+  • /api/llm/chat/completions (streaming; provider is plan/env-dependent)
   • /api/llm/stats RBAC (super_admin only)
 """
 from __future__ import annotations
@@ -213,21 +213,29 @@ def test_http_route_endpoint_returns_decision():
     assert body["trigger"] == "insurance_question"
 
 
-def test_http_chat_completions_streams_stub():
+def test_http_chat_completions_streams_successfully(admin_token):
+    """Historically named '..._streams_stub'. Under real plan-aware routing
+    (practice_id now comes from the authenticated user, not client-supplied
+    metadata), the provider that actually handles a call is legitimately
+    plan/environment-dependent — not always 'stub'. This verifies the
+    streaming mechanics work end-to-end via whichever provider is actually
+    registered and selected, rather than pinning an exact provider name."""
+    registered = httpx.get(f"{API}/llm/providers").json()["providers"]
     with httpx.stream("POST", f"{API}/llm/chat/completions",
+                     headers={"Authorization": f"Bearer {admin_token}"},
                      json={"messages": [{"role": "user", "content": "hello"}],
                            "stream": True, "call_id": "test_smoke"}) as r:
         assert r.status_code == 200
         # Headers expose routing decision
-        assert r.headers.get("x-llm-provider") == "stub"
+        assert r.headers.get("x-llm-provider") in registered
         assert r.headers.get("x-llm-escalated") == "0"
         chunks = [line for line in r.iter_lines() if line.startswith("data:")]
         assert any("[DONE]" in c for c in chunks)
-        assert any("[stub:" in c for c in chunks)
 
 
-def test_http_chat_completions_escalation_header():
+def test_http_chat_completions_escalation_header(admin_token):
     with httpx.stream("POST", f"{API}/llm/chat/completions",
+                     headers={"Authorization": f"Bearer {admin_token}"},
                      json={"messages": [{"role": "user", "content": "does my insurance cover crowns?"}],
                            "stream": True, "call_id": "test_smoke_esc"}) as r:
         assert r.status_code == 200

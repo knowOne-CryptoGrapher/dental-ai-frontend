@@ -4,7 +4,8 @@ External LLM Routing API.
 Exposes:
 
   • POST /api/llm/chat/completions  — OpenAI-compatible streaming endpoint
-                                       Retell uses as its Custom LLM.
+                                       for authenticated, practice-scoped
+                                       LLM calls.
                                        Internally routes between providers.
 
   • POST /api/llm/route             — Returns the routing decision for
@@ -18,9 +19,14 @@ Exposes:
 
   • GET  /api/llm/logs              — Recent routing log entries (super_admin).
 
-The /chat/completions endpoint is intentionally unauthenticated so Retell
-can call it. Use a network-level secret (e.g., `X-Retell-Signature` header,
-or a path-prefix shared secret) before going to production.
+The /chat/completions endpoint requires a valid JWT and a practice-scoped
+user (Depends(require_practice_scope())). Confirmed 2026-08-08: the live
+Retell voice agent does NOT call this endpoint — its response engine is
+Retell's own hosted "retell-llm", not a custom-LLM binding — and no other
+internal or external caller was found either. If a Retell (or other)
+integration is later wired to call this directly, it will need its own
+distinct auth mechanism, verified against that integration's actual
+behavior — do not assume this JWT check is what such a caller would send.
 """
 from __future__ import annotations
 import json
@@ -33,7 +39,7 @@ from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from auth import get_db, require_role
+from auth import get_db, require_role, require_practice_scope
 from llm.base import ChatMessage
 from llm.registry import get_provider, list_providers as _list_providers
 from llm.router import LLMRouter, get_default_router
@@ -135,9 +141,13 @@ async def route_only(req: RouteOnlyRequest):
 
 
 @router.post("/chat/completions")
-async def chat_completions(req: ChatCompletionsRequest, request: Request):
-    """OpenAI-compatible streaming chat completions endpoint that Retell
-    invokes for every conversational turn. Internally:
+async def chat_completions(
+    req: ChatCompletionsRequest,
+    request: Request,
+    current_user: dict = Depends(require_practice_scope()),
+):
+    """OpenAI-compatible streaming chat completions endpoint, authenticated
+    and practice-scoped. Internally:
       1. Decides which provider+model to use
       2. Streams the chosen provider's response back as SSE
       3. Logs the decision + token counts
@@ -145,9 +155,12 @@ async def chat_completions(req: ChatCompletionsRequest, request: Request):
     started = time.monotonic()
     chat_msgs = _to_chat_messages(req.messages)
 
-    # 1. Route — plan-aware if metadata.practice_id is provided
+    # 1. Route — plan-aware, scoped to the authenticated caller's own
+    # practice_id (never the client-supplied metadata.practice_id — trusting
+    # a client-supplied value here would let any authenticated caller pull
+    # another practice's plan tier and custom routing rules).
     llm_router: LLMRouter = get_default_router()
-    practice_id = (req.metadata or {}).get("practice_id")
+    practice_id = current_user.get("practice_id")
     plan = None
     if practice_id:
         try:
