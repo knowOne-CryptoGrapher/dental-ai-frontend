@@ -17,6 +17,8 @@ import pytest
 from dotenv import load_dotenv
 from pymongo import MongoClient
 
+from .conftest import signed_retell_post
+
 load_dotenv("/app/backend/.env")
 
 API_URL = os.environ.get("TEST_API_URL", "https://dental-ai-backend-cszmxu7emq-uw.a.run.app").rstrip("/")
@@ -250,13 +252,12 @@ def test_retell_lookup_patient_scopes_by_practice_id(two_practices):
     shared = a["shared_phone"]
 
     for p in (a, b):
-        r = httpx.post(
+        r = signed_retell_post(
             f"{API_URL}/api/retell/lookup-patient",
-            json={
+            {
                 "call": {"from_number": shared},
                 "args": {"practice_id": p["practice_id"], "phone_number": ""},
             },
-            timeout=10.0,
         )
         assert r.status_code == 200
         d = r.json()
@@ -271,10 +272,9 @@ def test_retell_lookup_patient_scopes_by_practice_id(two_practices):
 def test_retell_list_providers_scopes_by_practice_id(two_practices):
     a, b = two_practices
     for p in (a, b):
-        r = httpx.post(
+        r = signed_retell_post(
             f"{API_URL}/api/retell/list-providers",
-            json={"args": {"practice_id": p["practice_id"]}},
-            timeout=10.0,
+            {"args": {"practice_id": p["practice_id"]}},
         )
         assert r.status_code == 200
         ids = {prov["id"] for prov in r.json()["providers"]}
@@ -290,16 +290,15 @@ def test_retell_check_availability_scopes_by_practice_id(two_practices):
     a, b = two_practices
     # Ask A's backend about B's provider by name → should NOT find it
     b_provider_name = f"{b['slug'].title()}Provider"
-    r = httpx.post(
+    r = signed_retell_post(
         f"{API_URL}/api/retell/check-provider-availability",
-        json={
+        {
             "args": {
                 "practice_id": a["practice_id"],
                 "provider_name": b_provider_name,
                 "date": "2027-01-15",
             }
         },
-        timeout=10.0,
     )
     assert r.status_code == 200
     d = r.json()
@@ -316,9 +315,9 @@ def test_retell_book_appointment_respects_practice_id(two_practices):
     """
     a, b = two_practices
     caller = f"+1555333{int(time.time()) % 10000:04d}"
-    r = httpx.post(
+    r = signed_retell_post(
         f"{API_URL}/api/retell/book-appointment",
-        json={
+        {
             "call": {"from_number": caller},
             "args": {
                 "practice_id": a["practice_id"],
@@ -329,7 +328,6 @@ def test_retell_book_appointment_respects_practice_id(two_practices):
                 "reason": "Test",
             },
         },
-        timeout=10.0,
     )
     assert r.status_code == 200
     apt_id = r.json()["appointment_id"]
@@ -353,13 +351,12 @@ def test_retell_get_patient_appointments_scoped(two_practices):
     a, b = two_practices
     shared = a["shared_phone"]
     for p in (a, b):
-        r = httpx.post(
+        r = signed_retell_post(
             f"{API_URL}/api/retell/get-patient-appointments",
-            json={
+            {
                 "call": {"from_number": shared},
                 "args": {"practice_id": p["practice_id"], "phone_number": ""},
             },
-            timeout=10.0,
         )
         assert r.status_code == 200
         d = r.json()

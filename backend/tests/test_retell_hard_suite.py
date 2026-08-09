@@ -9,6 +9,7 @@ Run:
     cd /app/backend && python -m pytest tests/test_retell_hard_suite.py -v
 """
 import os
+import json
 import time
 import asyncio
 import uuid
@@ -16,10 +17,20 @@ import httpx
 import pytest
 from dotenv import load_dotenv
 
+from .conftest import sign_retell_body, signed_retell_post
+
 load_dotenv("/app/backend/.env")
 
 # Hit the public preview URL so this mirrors the real Retell path exactly.
 API_URL = os.environ.get("TEST_API_URL", "https://dental-ai-backend-cszmxu7emq-uw.a.run.app").rstrip("/")
+# NOTE: this practice_id only exists in production, not a bare local dev DB.
+# test_1a, test_2a, and test_3a require it to be present and will correctly
+# fail (200 with found:False/count:0/available:False, not a crash) against
+# a fresh local database that never seeded it. test_10b's latency thresholds
+# are similarly tuned for production Cloud Run, not a single-worker local
+# uvicorn dev server — expect it to fail locally under load too. None of this
+# is auth/signature related; confirmed 2026-08 during the X-Retell-Signature
+# test fix (see HANDOFF.md).
 PRACTICE_ID = "c50330bb-079b-4286-ac62-717a40bfa8dd"
 
 # A phone that's known to exist in this env (Darnell John)
@@ -35,7 +46,7 @@ def wrap(args: dict, from_number: str | None = None) -> dict:
 
 
 def post(path: str, body: dict) -> httpx.Response:
-    return httpx.post(f"{API_URL}/api/retell{path}", json=body, timeout=10.0)
+    return signed_retell_post(f"{API_URL}/api/retell{path}", body, timeout=10.0)
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -74,10 +85,11 @@ def test_1b_lookup_unknown_patient():
 
 
 def test_1c_malformed_json_returns_400_json_not_html():
+    body_bytes = b"this-is-not-json"
     r = httpx.post(
         f"{API_URL}/api/retell/lookup-patient",
-        content=b"this-is-not-json",
-        headers={"Content-Type": "application/json"},
+        content=body_bytes,
+        headers={"Content-Type": "application/json", "X-Retell-Signature": sign_retell_body(body_bytes)},
         timeout=5.0,
     )
     assert r.status_code == 400
@@ -341,10 +353,11 @@ def test_10a_100_malformed_requests_all_400_json():
     html_hits = 0
     server_errors = 0
     for i in range(50):  # 100 is overkill in CI; 50 still proves the point
+        body_bytes = f"garbage-{i}".encode()
         r = httpx.post(
             f"{API_URL}/api/retell/lookup-patient",
-            content=f"garbage-{i}".encode(),
-            headers={"Content-Type": "application/json"},
+            content=body_bytes,
+            headers={"Content-Type": "application/json", "X-Retell-Signature": sign_retell_body(body_bytes)},
             timeout=5.0,
         )
         if r.status_code >= 500:
@@ -360,10 +373,12 @@ def test_10a_100_malformed_requests_all_400_json():
 
 def test_10b_load_20_parallel_requests_under_5s():
     async def one():
+        body_bytes = json.dumps({"args": {"practice_id": PRACTICE_ID}}).encode("utf-8")
         async with httpx.AsyncClient(timeout=10.0) as c:
             r = await c.post(
                 f"{API_URL}/api/retell/list-providers",
-                json={"args": {"practice_id": PRACTICE_ID}},
+                content=body_bytes,
+                headers={"Content-Type": "application/json", "X-Retell-Signature": sign_retell_body(body_bytes)},
             )
             return r.status_code, r.elapsed.total_seconds()
 
@@ -416,9 +431,11 @@ def test_13b_html_injection_in_patient_name(cleanup_test_phone):
 
 def test_13c_oversized_payload_rejected():
     huge_name = "A" * 100_000
+    body_bytes = json.dumps({"args": {"practice_id": PRACTICE_ID, "phone_number": huge_name}}).encode("utf-8")
     r = httpx.post(
         f"{API_URL}/api/retell/lookup-patient",
-        json={"args": {"practice_id": PRACTICE_ID, "phone_number": huge_name}},
+        content=body_bytes,
+        headers={"Content-Type": "application/json", "X-Retell-Signature": sign_retell_body(body_bytes)},
         timeout=5.0,
     )
     # Must respond (200 with no match, or 400/413) — must not 500 or hang

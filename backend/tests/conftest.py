@@ -14,6 +14,7 @@ Cleanup convention: every module-scoped fixture yields, then deletes every
 document it inserted (keyed by practice_id). Orphaned test data is identifiable
 by the "testpractice-" name prefix.
 """
+import json
 import os
 import time
 import uuid
@@ -21,6 +22,7 @@ import bcrypt
 import httpx
 import pytest
 from pymongo import MongoClient
+from retell.lib.webhook_auth import symmetric as _retell_symmetric
 
 # ── Config ─────────────────────────────────────────────────────────────
 
@@ -43,6 +45,8 @@ if not _mongo_uri:
         "Set MONGODB_URI (or MONGO_URL) before running the test suite."
     )
 
+RETELL_API_KEY = os.environ["RETELL_API_KEY"]
+
 _mongo_client = MongoClient(_mongo_uri, serverSelectionTimeoutMS=5_000)
 DB = _mongo_client[_db_name]
 
@@ -57,6 +61,27 @@ COLLECTIONS_TO_CLEAN = (
 
 
 # ── Low-level helpers ───────────────────────────────────────────────────
+
+def sign_retell_body(body_bytes: bytes) -> str:
+    """Real X-Retell-Signature header value for the given raw request body,
+    same construction (retell.lib.webhook_auth.symmetric['sign']) that
+    utils/retell_security.py verifies against. Works on any byte string,
+    valid JSON or not — HMAC doesn't care about content."""
+    return _retell_symmetric["sign"](body_bytes.decode("utf-8"), RETELL_API_KEY)
+
+
+def signed_retell_post(url: str, body: dict, timeout: float = 10.0) -> httpx.Response:
+    """POST a JSON body to a signature-protected /api/retell/* endpoint with
+    a real, valid X-Retell-Signature. Serializes once and signs those exact
+    bytes so the signature always matches what's actually transmitted."""
+    body_bytes = json.dumps(body).encode("utf-8")
+    return httpx.post(
+        url,
+        content=body_bytes,
+        headers={"Content-Type": "application/json", "X-Retell-Signature": sign_retell_body(body_bytes)},
+        timeout=timeout,
+    )
+
 
 def _uid(prefix: str = "") -> str:
     return f"{prefix}{uuid.uuid4().hex[:8]}"
