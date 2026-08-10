@@ -25,13 +25,14 @@ ADMIN_PASSWORD = "TestPass123!"
 # ── Unit: plan registry ──────────────────────────────────────────────
 
 
-def test_plan_registry_has_three_tiers():
+def test_plan_registry_has_five_tiers():
     from plans import list_plans, PLANS
     ids = sorted(p.id for p in list_plans())
-    assert ids == ["basic", "enterprise", "professional"]
-    assert PLANS["basic"].price_usd == 399.0
-    assert PLANS["professional"].price_usd == 599.0
+    assert ids == ["basic", "elite", "enterprise", "founding_clinic_basic", "professional"]
+    assert PLANS["basic"].price_usd == 499.0
+    assert PLANS["professional"].price_usd == 699.0
     assert PLANS["enterprise"].price_usd == 999.0
+    assert PLANS["elite"].price_usd == 1499.0
 
 
 def test_get_plan_falls_back_to_basic_on_unknown():
@@ -49,7 +50,11 @@ def test_basic_plan_disables_escalation_features():
     assert basic.llm.allow_escalation is False
     assert basic.features.analytics is False
     assert basic.features.insurance is False
-    assert basic.features.audit_log is False
+    # audit_log is a deliberate exception, not an oversight — Basic gets
+    # compliance logging regardless of tier, unrelated to LLM escalation
+    # (which is what this test is actually about). It was False when this
+    # test was first written; plans.py now explicitly sets it True for basic.
+    assert basic.features.audit_log is True
 
 
 def test_professional_plan_enables_escalation_and_features():
@@ -62,11 +67,26 @@ def test_professional_plan_enables_escalation_and_features():
     assert pro.features.multi_location is True
 
 
-def test_enterprise_unlocks_everything():
+def test_enterprise_unlocks_its_feature_set():
     from plans import get_plan
     ent = get_plan("enterprise")
     flags = ent.features.__dict__
-    assert all(flags.values()), f"Enterprise should unlock everything: {flags}"
+    for f in ("analytics", "insurance", "audit_log", "multi_location",
+              "custom_voice", "custom_routing_rules", "knowledge_base", "sip_telephony"):
+        assert flags[f] is True, f"Enterprise should unlock {f}: {flags}"
+    # These remain Elite-only — Enterprise must NOT have them
+    for f in ("dedicated_support", "baa_available", "custom_model_selection"):
+        assert flags[f] is False, f"Enterprise should NOT unlock {f} (Elite-only): {flags}"
+
+
+def test_elite_unlocks_everything():
+    from plans import get_plan
+    elite = get_plan("elite")
+    flags = elite.features.__dict__
+    # insurance_preview is a founding_clinic_basic-only flag, not part of
+    # Elite's (or any paid tier's) real feature set — excluded deliberately.
+    checked = {k: v for k, v in flags.items() if k != "insurance_preview"}
+    assert all(checked.values()), f"Elite should unlock everything except insurance_preview: {flags}"
 
 
 def test_public_dict_never_leaks_stripe_price_id():
@@ -132,7 +152,7 @@ def test_superadmin_plans_endpoint(super_token):
     r = httpx.get(f"{API}/superadmin/plans", headers={"Authorization": f"Bearer {super_token}"})
     assert r.status_code == 200
     plans = r.json()
-    assert len(plans) == 3
+    assert len(plans) == 5
     for p in plans:
         assert "features" in p
         assert "stripe_price_id" not in p

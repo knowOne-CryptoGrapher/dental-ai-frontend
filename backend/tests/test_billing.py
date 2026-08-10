@@ -27,12 +27,12 @@ def admin_token():
     return r.json()["access_token"]
 
 
-def test_plans_endpoint_public_and_returns_three_plans():
+def test_plans_endpoint_public_and_returns_four_plans():
     r = httpx.get(f"{API}/billing/plans")
     assert r.status_code == 200
     plans = r.json()
     ids = sorted(p["id"] for p in plans)
-    assert ids == ["basic", "enterprise", "professional"]
+    assert ids == ["basic", "elite", "enterprise", "professional"]
 
 
 def test_plans_have_required_fields_and_no_secret_price_id():
