@@ -1,5 +1,5 @@
 # Dental AI — Living Handoff Document
-**Last updated:** 2026-08-09
+**Last updated:** 2026-08-10
 **Backend revision:** dental-ai-backend-00080-qn9 (deployed 2026-08-08 — LLM proxy auth fix + refreshed secrets (incl. rotated MongoDB password), 100% traffic, live-verified, see Urgent section below)
 **Frontend commit:** b6cf1b0c (pushed and auto-deployed to Cloudflare Pages)
 **Branch:** unlocked-main
@@ -34,14 +34,20 @@
 ---
 
 ## Current DB State
-*(verified via direct query 2026-08-07, not carried forward from a stale snapshot — counts had drifted from the last-known figures, likely from real usage/testing between sessions)*
-- 4 practices (was tracked as 1 — 3 more created since last verified count)
-- 4 users
-- 2 patients
+*(verified via direct query 2026-08-10, after a full test-data cleanup — do not carry these figures forward without re-verifying; see Workflow Rule 11)*
+- 2 practices — `practice-test-001` (Professional), `pro test 1` (Enterprise)
+- 1 superadmin — `d9john5@gmail.com`
+- 2 admins — `admin@dentalai.test` (practice-test-001), `d.john95@hotmail.com` (pro test 1)
+- 1 patient — Darnell John, `+12502991248`
+- 3 providers — Dr. Sarah Lee, Dr. Michael Chen, Emily Rogers
 - 0 appointments
-- 2 call logs
-- 2 sales leads
-- 0 founding clinic applications (feature just shipped this session)
+- 5 call logs — real Retell test calls (2 from 2026-07-24, 3 more from 2026-08-16 — count drifted between this session's cleanup and this verification pass; re-check before citing)
+- 2 sales leads — Founding Clinic modal test submissions
+
+**Cleanup performed 2026-08-10** (test-only environment, no real customer data at risk):
+- Deleted 51 practices — 49 auto-generated test fixtures (matching `@example.com`/`.local` email or `[retell`/`[rbac`/`[invites`/`[xiso`/`[apt`/`[res`/`AUTO`/`fixture` name patterns) plus 2 stale `onboarding`-status practices under `d.john95@hotmail.com`. Kept only `practice-test-001` and `pro test 1`.
+- Linked records deleted alongside: 31 users, 1 patient, 0 appointments, 0 providers.
+- Separately deleted 1 duplicate superadmin (`owner@dentalai.com`) and 11 orphaned `admin`-role users (`practice_id: None`, `@example.com`) — pre-existing cruft not linked to any of the deleted practices, found during post-cleanup verification rather than assumed resolved.
 
 ---
 
