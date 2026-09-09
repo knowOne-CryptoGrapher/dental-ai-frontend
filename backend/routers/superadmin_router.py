@@ -49,7 +49,7 @@ def _function_urls(base: str) -> dict:
 def _backend_base() -> str:
     return os.environ.get(
         "PUBLIC_BACKEND_URL",
-        "https://dental-ai-backend-cszmxu7emq-uw.a.run.app",
+        "https://api.frontdeskdentalai.com",
     )
 
 
@@ -116,7 +116,7 @@ async def get_retell_config(
         "rendered_prompt": rendered_prompt,
         "prompt_hash": prompt_hash,
         "function_urls": _function_urls(base),
-        "webhook_url": f"{base}/api/webhooks/retell/{practice_id}",
+        "webhook_url": f"{base}/api/retell/webhook",
         "automation_available": bool(RETELL_API_KEY),
     }
 

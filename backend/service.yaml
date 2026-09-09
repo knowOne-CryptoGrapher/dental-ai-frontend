@@ -178,7 +178,7 @@ spec:
               name: SES_CONFIGURATION_SET
               key: latest
         - name: PUBLIC_BACKEND_URL
-          value: https://dental-ai-backend-cszmxu7emq-uw.a.run.app
+          value: https://api.frontdeskdentalai.com
   traffic:
   - percent: 100
     latestRevision: true
