@@ -1,16 +1,16 @@
 # Dental AI — Living Handoff Document
-**Last updated:** 2026-08-10
-**Backend revision:** dental-ai-backend-00080-qn9 (deployed 2026-08-08 — LLM proxy auth fix + refreshed secrets (incl. rotated MongoDB password), 100% traffic, live-verified, see Urgent section below)
+**Last updated:** 2026-09-09
+**Backend revision:** dental-ai-backend-00001-rp6 (deployed 2026-09-09 — first revision in `northamerica-northeast1` after the region migration below; the old `us-west1` revision history, e.g. `00080-qn9`, no longer applies to the live service)
 **Frontend commit:** b6cf1b0c (pushed and auto-deployed to Cloudflare Pages)
 **Branch:** unlocked-main
-**Backend URL:** https://dental-ai-backend-cszmxu7emq-uw.a.run.app
+**Backend URL:** https://api.frontdeskdentalai.com (public entry point via Global HTTPS Load Balancer — see Cloud Run Region Migration section; the old direct `.run.app` domain-mapping URL, `dental-ai-backend-cszmxu7emq-uw.a.run.app`, is gone along with the `us-west1` service)
 **Frontend URL:** https://frontdeskdentalai.com
 
 ---
 
 ## Team & Stack
 - **Team:** Darnell (builder), Atlas (architect), Claude (co-engineer)
-- **Backend:** Python / FastAPI / Cloud Run us-west1
+- **Backend:** Python / FastAPI / Cloud Run northamerica-northeast1 (Montreal) — migrated from us-west1 2026-09-09, see Cloud Run Region Migration section
 - **Frontend:** React 19 + CRACO / Cloudflare Pages
 - **DB:** MongoDB Atlas — database name: `dental_ai` (underscore, not hyphen)
 - **Voice:** Retell AI — agent `agent_3420090c2d922714273ae4ad39` provisioned on `practice-test-001` (confirmed live in DB; `phone_number` not yet set in our own `settings.retell`, verify in Retell dashboard whether a number is actually linked before assuming inbound calls route end-to-end)
@@ -78,6 +78,56 @@
 - DB name: `dental_ai` (underscore)
 - JWT secret key rotated — version 59 in Secret Manager as of this session's last deploy (verify current version before assuming this is still current; it increments on every deploy since it's provisioned from `.env` each time)
 - MongoDB indexes (verified 2026-08-07): 20 indexes across `patients` (5), `appointments` (9, including `booking_key_unique` which prevents double-booking), `providers` (3), `audit_logs` (3). `users` and `practices` currently have only the default `_id_` index.
+
+---
+
+## Cloud Run Region Migration + Load Balancer (DONE 2026-09-09)
+**Status:** Live, DNS-cut-over, verified end-to-end. In soak period before deleting `us-west1` resources — no deletion date set yet.
+
+### What changed
+- Cloud Run backend moved from `us-west1` (Oregon, USA) to `northamerica-northeast1` (Montreal) — closes the data-residency gap flagged in `docs/DATA_FLOW.md`/`docs/PHIPA_PIPEDA_CHECKLIST.md` (draft) for **compute only**. MongoDB Atlas is still a single, region-unconfirmed cluster — **not migrated**, separate open item.
+- `deploy_backend.ps1` line 19 (`$REGION`) and `service.yaml`'s `cloud.googleapis.com/location` + `COMPUTE_REGION` updated to `northamerica-northeast1` (commit `d8221ba8`). `COMPUTE_REGION` was previously `"northamerica-west2"` — a non-existent GCP region (confirmed via `gcloud run regions list` and GCP docs: GCP's only two Canadian regions are `northamerica-northeast1` Montreal and `northamerica-northeast2` Toronto; a Calgary region exists on AWS as `ca-west-1` but has no GCP equivalent — the original "ca-west" naming in `region_config.py` appears to have been borrowed from AWS's naming and doesn't apply to GCP).
+- The old Cloud Run **domain mapping** (legacy feature) could not be used for the new region — `gcloud beta run domain-mappings create` returns `501 UNIMPLEMENTED: Creating domain mappings is not allowed in northamerica-northeast1`. This forced a bigger change than a simple redeploy: a **Global External HTTPS Load Balancer + Serverless NEG** replaces the domain mapping entirely.
+
+### Load balancer components (all in project `dental-ai-backend`, global scope unless noted)
+| Resource | Name | Notes |
+|---|---|---|
+| Static IP | `dental-ai-lb-ip` | `34.120.47.218` |
+| DNS authorization | `dental-ai-dns-auth` | Requires a one-time CNAME in Cloudflare: `_acme-challenge.api.frontdeskdentalai.com` → `edd9a7fa-154e-4cf8-a110-faa0c0294aa6.8.authorize.certificatemanager.goog.` — already added, do not remove, the managed cert renews against it |
+| Managed certificate | `dental-ai-cert` | DNS-authorized (chosen over the classic load-balancer-authorized type specifically to avoid a DNS-cutover-then-pray downtime window) |
+| Certificate map + entry | `dental-ai-cert-map` / `dental-ai-cert-map-entry` | hostname `api.frontdeskdentalai.com` |
+| Serverless NEG | `dental-ai-neg` | region `northamerica-northeast1`, points at Cloud Run service `dental-ai-backend` |
+| Backend service | `dental-ai-backend-svc` | `--load-balancing-scheme=EXTERNAL_MANAGED`, NEG attached |
+| URL map | `dental-ai-lb` | default service → `dental-ai-backend-svc` |
+| Target HTTPS proxy | `dental-ai-https-proxy` | url-map `dental-ai-lb`, certificate-map `dental-ai-cert-map` |
+| Global forwarding rule | `dental-ai-https-rule` | IP `dental-ai-lb-ip`, port 443 |
+
+Required enabling the **Certificate Manager API** on the project (`certificatemanager.googleapis.com`) — wasn't previously enabled.
+
+**Gotcha discovered along the way:** the new Cloud Run service (`northamerica-northeast1`) started with an **empty IAM policy** — `gcloud run services replace` doesn't carry over invoker bindings, and this was a brand-new service resource (the old Montreal service from an earlier abandoned migration attempt had been deleted, not reused), so it had none. This produced HTTP 403 on the raw `.run.app` URL until fixed with:
+```
+gcloud run services add-iam-policy-binding dental-ai-backend --region northamerica-northeast1 --member=allUsers --role=roles/run.invoker --project dental-ai-backend
+```
+Caught via direct `curl` verification before touching DNS — worth remembering for any future new-service-in-a-new-region deploy: **the public-invoker binding is not automatic and must be set explicitly.**
+
+### Cutover sequence actually followed (zero-downtime, `us-west1` never taken down)
+1. Deployed backend to `northamerica-northeast1`, verified `/health` directly against the `.run.app` URL (caught the IAM gap here, fixed it, re-verified 200).
+2. Added the DNS-authorization CNAME in Cloudflare, confirmed resolving via `nslookup`, then created the managed cert — reached `ACTIVE` in well under the ~15-60 min Google typically quotes.
+3. Built all LB components (table above).
+4. Pre-cutover verification with `curl --resolve api.frontdeskdentalai.com:443:34.120.47.218 ...` — hits the real hostname/cert/routing chain without touching live DNS. Passed (200, correct body). Note: `gcloud compute backend-services get-health` does **not** work on Serverless NEG backends (`GetHealth is not supported`) — this is a documented GCP limitation, not a failure signal; the `--resolve` curl test is the real verification for this backend type.
+5. Darnell cut Cloudflare DNS for `api.frontdeskdentalai.com` from CNAME (`ghs.googlehosted.com`) to A record (`34.120.47.218`).
+6. Post-cutover verification on real DNS: HTTP 200, `Resolve-DnsName` → `34.120.47.218`, and the live TLS certificate confirmed via a raw `SslStream` handshake (not `curl -v` — Windows' `schannel` curl backend doesn't print subject/issuer lines the way OpenSSL-based curl does) — issuer `CN=WR3, O=Google Trust Services, C=US`, confirming it's the new cert, not a cached/old one.
+
+### Known issue found during this work — not yet fixed
+**`PUBLIC_BACKEND_URL` in `service.yaml` still points to the deleted `us-west1` URL** (`https://dental-ai-backend-cszmxu7emq-uw.a.run.app`). Found while drafting this update — not yet checked what consumes this env var (likely email templates or a webhook-callback base URL) or fixed. **Check this before it causes a real broken link somewhere.**
+
+### Rollback
+`us-west1`'s Cloud Run service and domain-mapping config were left completely untouched throughout — rollback, if ever needed before those are deleted, is just reverting the one Cloudflare DNS record back to the CNAME. No GCP-side undo required.
+
+### Not yet done
+- Delete `us-west1` Cloud Run service and its (now-unused) domain mapping, once soak period is judged sufficient.
+- Fix the stale `PUBLIC_BACKEND_URL`.
+- MongoDB Atlas region migration — separate, not started, cluster region still unconfirmed (see `docs/DATA_FLOW.md` §5.4 and the residency-migration scoping notes).
 
 ---
 
@@ -303,17 +353,18 @@
 
 ## Recent Commits (Last 10)
 ```
-cf5173cf fix(retell): enforce signature verification on all 7 custom-function endpoints
-75229906 docs: update HANDOFF.md — Retell verification options investigated
-e180137e docs: update HANDOFF.md — Retell auth fix written and locally verified, not deployed
-c8c8deac docs: add Workflow Rule #13 — report in full detail, not summarized
-063b4a86 docs: update HANDOFF.md — security/leakage/load audit summary
-860ff136 fix(pricing): correct Basic to $499 CAD and Professional to $699 CAD across backend and frontend
-e72b9b2b docs: update HANDOFF.md
-b0a7d23a feat(pricing): add Coming Soon state for locked Professional tier on pricing/landing pages and onboarding wizard
-ba4b66d2 docs: update HANDOFF.md
-a4f7589a feat(signup): gate self-serve registration behind SELF_SERVE_TIERS_ENABLED, close direct-URL bypass to locked tiers
+0f75df8d Revert "docs: comprehensive README for current project state"
+7465c12d docs: comprehensive README for current project state
+d8221ba8 fix(infra): migrate Cloud Run target region us-west1 -> northamerica-northeast1
+6f5e3d0e docs: update HANDOFF.md -- DB cleanup, accurate current state
+ccf4acca docs: update HANDOFF.md -- Batch 2 items 1-4 resolved, closes Batch 2
+a970c69f docs: update HANDOFF.md — ITEM 4 (stale plan-tier tests) resolved, closes Batch 1
+45cd98ce fix(tests): correct stale plan-tier count/pricing assumptions (5 tiers total, 4 public), split Enterprise-vs-Elite feature-unlock test, fix stale basic-plan audit_log assertion
+c42999ca docs: scope rate-limit cascade fix (Option A) — not yet implemented
+0a49533a docs: update HANDOFF.md — ITEM 2 (plan-gate test rewrites) resolved
+1971b729 test(plan-gates): rewrite Professional/Enterprise tests for self-serve lockdown (Option B — preserve gate coverage via DB-seeded practices), fix stale 403->402 status code assertions
 ```
+*(`7465c12d`/`0f75df8d` — README.md was created and then reverted the same session; it was a miscommunication, not an intended repo change. The load-balancer/region-migration infra work in `d8221ba8` and this session's uncommitted HANDOFF.md update are the real substance of 2026-09-09.)*
 
 ---
 
