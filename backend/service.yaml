@@ -3,7 +3,7 @@ kind: Service
 metadata:
   name: dental-ai-backend
   labels:
-    cloud.googleapis.com/location: us-west1
+    cloud.googleapis.com/location: northamerica-northeast1
   annotations:
     run.googleapis.com/ingress: all
 spec:
@@ -44,7 +44,7 @@ spec:
         env:
         # Non-sensitive config
         - name: COMPUTE_REGION
-          value: "northamerica-west2"   # Update per deployment region
+          value: "northamerica-northeast1"   # Update per deployment region
         - name: DB_REGION
           value: "CA-CENTRAL"           # Update when Atlas cluster region is confirmed
         - name: LOG_LEVEL

@@ -16,7 +16,7 @@ USAGE:  .\deploy_backend.ps1
 $ErrorActionPreference = "Stop"
 
 $PROJECT   = "dental-ai-backend"
-$REGION    = "us-west1"
+$REGION    = "northamerica-northeast1"
 $SERVICE   = "dental-ai-backend"
 $IMAGE     = "gcr.io/$PROJECT/$SERVICE"
 $REPO_ROOT = $PSScriptRoot
