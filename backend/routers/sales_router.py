@@ -19,7 +19,7 @@ from services.email_service import email_service
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/sales", tags=["sales"])
 
-SALES_NOTIFY_EMAIL = os.getenv("SALES_NOTIFY_EMAIL", "sales@dentalai.ca")
+SALES_NOTIFY_EMAIL = os.getenv("SALES_NOTIFY_EMAIL", "sales@frontdeskdentalai.com")
 
 
 class FoundingClinicRequest(BaseModel):

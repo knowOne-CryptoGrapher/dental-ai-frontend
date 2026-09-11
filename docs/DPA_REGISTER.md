@@ -23,6 +23,7 @@
 | Groq | Fast inference | Redacted prompts only | ⏳ Requested — awaiting response | Requested Sept 2026 | Request letter sent; DPA not yet confirmed |
 | Retell | Voice call handling | Caller audio + transcripts | ⏳ Requested — awaiting response | Requested Sept 2026 | Request letter sent; still highest priority — audio is PHI |
 | Google Cloud | Compute + Secret Manager | Encrypted secrets only | ✅ Executed | — | GCP DPA covers Cloud Run |
+| Crisp | Live chat / customer support messaging | Potentially chat contents (PHI exposure not yet assessed) | ❌ Not started | — | Named in the live Privacy Policy §8, but had no DPA-tracking status anywhere prior to this entry — found during the 2026-09 legal-consistency audit. Confirm actual data flow/PHI exposure before treating as low-risk. |
 
 ---
 

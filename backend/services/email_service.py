@@ -298,7 +298,7 @@ class EmailService:
             from_addr = (
                 f"{SES_FROM_NAME} <{SES_FROM_EMAIL}>"
                 if SES_FROM_EMAIL
-                else "Dental AI <noreply@dentalai.ca>"
+                else "Front Desk Dental AI <noreply@frontdeskdentalai.com>"
             )
             kwargs: dict = {
                 "FromEmailAddress": from_addr,

@@ -440,7 +440,7 @@ export default function BillingPage() {
             </div>
             <Button
               className="bg-[#D4AF37] hover:bg-[#b8962f] text-white gap-1.5 shrink-0"
-              onClick={() => { window.location.href = 'mailto:sales@dentalai.ca'; }}
+              onClick={() => { window.location.href = 'mailto:sales@frontdeskdentalai.com'; }}
             >
               Upgrade to Elite — $1,499/mo
               <ArrowRight className="w-4 h-4" aria-hidden="true" />

@@ -72,7 +72,7 @@ Version 1.1 — Last updated: 2026-06-01
 
 ## 8. Support expectations
 
-- Email support: support@dentalai.ca
+- Email support: support@frontdeskdentalai.com
 - Response time: within 2 business days
 - Critical issues (service unavailable): within 4 hours
 

@@ -80,11 +80,11 @@ Some data is processed by third-party AI providers outside Canada for the purpos
 - You have the right to request deletion (subject to legal retention requirements)
 - You have the right to withdraw consent, subject to legal and contractual restrictions
 
-To exercise these rights, contact: privacy@dentalai.ca
+To exercise these rights, contact: privacy@frontdeskdentalai.com
 
 ---
 
 ## 9. Contact information
 
-- Privacy Officer: privacy@dentalai.ca
+- Privacy Officer: privacy@frontdeskdentalai.com
 - Mailing address: [to be completed before launch]

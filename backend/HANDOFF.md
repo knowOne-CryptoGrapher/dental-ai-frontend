@@ -20,6 +20,17 @@
 
 ---
 
+## Company & Brand
+- **Legal entity:** Simplex Dental Intelligence & Reception Systems Inc.
+- **Brand name:** Front Desk Dental AI
+- **d/b/a convention:** where both need to appear together (e.g. legal contact/officer lines), use "Simplex Dental Intelligence & Reception Systems Inc., operating as Front Desk Dental AI."
+- **When to use which:**
+  - Legal entity name — contracts, Terms of Service / Privacy Policy contact/officer lines, billing descriptors, anything a lawyer or auditor would read as the party to an agreement.
+  - Brand name — UI copy, marketing pages, email body copy, copyright notices (confirmed convention — brand name is correct in copyright lines, not the legal entity).
+- This section did not previously exist in this file; added 2026-09-11 during the corporation-name/branding audit, per explicit confirmation from Darnell/the user.
+
+---
+
 ## Key Credentials & Config
 - **Test practice:** `practice-test-001` (plan: professional)
 - **Superadmin:** `d9john5@gmail.com`
@@ -230,6 +241,7 @@ Caught via direct `curl` verification before touching DNS — worth remembering 
 - Refund logic in Stripe
 - Data Processing Agreement draft
 - Clinic Service Agreement draft
+- **`docs/PRIVACY_POLICY.md` and `docs/TERMS_AND_CONDITIONS.md` are stale, non-identical duplicates of the live legal pages** (`PrivacyPage.jsx`, `TermsOfServicePage.jsx`) — found during the 2026-09 corporation-name/branding audit. Needs a decision (delete vs. clearly mark superseded) before lawyer review. Not resolved here — flagging as an open item for Darnell's lawyer's input.
 - PHIPA/PIPEDA compliance checklist
 - SLA definition document
 - Marketing assets (demo video, onboarding PDF, outreach sequences)

@@ -7,7 +7,7 @@ export default function LandingFooter() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div>
-            <p className="text-xl font-bold text-white mb-2">Dental AI</p>
+            <p className="text-xl font-bold text-white mb-2">Front Desk Dental AI</p>
             <p className="text-sm text-slate-400 mb-4 leading-relaxed">
               Clinical-grade AI for modern dental practices
             </p>
@@ -47,7 +47,7 @@ export default function LandingFooter() {
                 </Link>
               </li>
               <li>
-                <a href="mailto:sales@dentalai.ca" className="text-sm text-slate-400 hover:text-white transition-colors">
+                <a href="mailto:sales@frontdeskdentalai.com" className="text-sm text-slate-400 hover:text-white transition-colors">
                   Contact
                 </a>
               </li>

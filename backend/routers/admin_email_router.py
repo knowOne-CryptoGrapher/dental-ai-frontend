@@ -89,7 +89,7 @@ async def test_notification(
         raise HTTPException(status_code=422, detail="No admin email configured for this practice")
 
     practice_name = practice.get("name", "Your Practice")
-    frontend_url = "https://app.dentalai.ca"
+    frontend_url = "https://frontdeskdentalai.com"
 
     sent = await email_service.send_admin_notification(
         db=db,

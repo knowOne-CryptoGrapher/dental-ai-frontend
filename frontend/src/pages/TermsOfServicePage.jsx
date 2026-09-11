@@ -5,7 +5,7 @@ import LandingFooter from '../components/landing/LandingFooter';
 const SECTIONS = [
   {
     title: '1. Acceptance of Terms',
-    body: 'By accessing or using Dental AI, you agree to these Terms of Service. If you do not agree, do not use the service. If you are using Dental AI on behalf of a dental practice or organization, you represent that you are authorized to bind that organization to these terms.',
+    body: 'These Terms of Service govern your access to and use of Front Desk Dental AI, a service provided by Simplex Dental Intelligence & Reception Systems Inc. ("we", "us", "our"). By accessing or using Front Desk Dental AI, you agree to these Terms of Service. If you do not agree, do not use the service. If you are using Front Desk Dental AI on behalf of a dental practice or organization, you represent that you are authorized to bind that organization to these terms.',
   },
   {
     title: '2. Description of Service',
@@ -78,7 +78,7 @@ const SECTIONS = [
   },
   {
     title: '13. Contact',
-    contact: { email: 'legal@dentalai.ca', label: 'For legal or contractual questions, contact:', org: 'Dental AI — Canada' },
+    contact: { email: 'legal@frontdeskdentalai.com', label: 'For legal or contractual questions, contact:', org: 'Simplex Dental Intelligence & Reception Systems Inc., operating as Front Desk Dental AI' },
   },
 ];
 

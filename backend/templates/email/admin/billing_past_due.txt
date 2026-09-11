@@ -1,7 +1,7 @@
 PAYMENT PAST DUE — $practice_name
 ===================================
 
-Your Dental AI subscription payment is past due. Please update your payment
+Your Front Desk Dental AI subscription payment is past due. Please update your payment
 method to avoid interruption to your AI receptionist service.
 
 Plan      : $plan_name

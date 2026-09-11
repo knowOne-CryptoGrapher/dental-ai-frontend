@@ -5,7 +5,7 @@ import LandingFooter from '../components/landing/LandingFooter';
 const SECTIONS = [
   {
     title: '1. Introduction',
-    body: 'Dental AI ("we", "us", "our") provides an AI-powered receptionist platform for dental practices. We are committed to protecting privacy and handling personal information in accordance with the Personal Information Protection and Electronic Documents Act (PIPEDA) and the BC Personal Information Protection Act (PIPA). This policy explains how we collect, use, disclose, and protect personal and health information.',
+    body: 'Simplex Dental Intelligence & Reception Systems Inc., operating as Front Desk Dental AI ("we", "us", "our"), provides an AI-powered receptionist platform for dental practices. We are committed to protecting privacy and handling personal information in accordance with the Personal Information Protection and Electronic Documents Act (PIPEDA) and the BC Personal Information Protection Act (PIPA). This policy explains how we collect, use, disclose, and protect personal and health information.',
     body2: 'For most practice and patient data, we act as a service provider / processor to dental practices, who remain responsible for their own compliance obligations and for providing any required notices and consents to their patients.',
   },
   {
@@ -84,7 +84,7 @@ const SECTIONS = [
       'Request deletion of your personal information, subject to legal and contractual limitations.',
       'Withdraw consent to certain uses of your information, where consent is the basis for processing.',
     ],
-    body3: 'To exercise these rights, contact us at privacy@dentalai.ca. For patient data, we may direct you to contact your dental practice, who is typically the controller of that information.',
+    body3: 'To exercise these rights, contact us at privacy@frontdeskdentalai.com. For patient data, we may direct you to contact your dental practice, who is typically the controller of that information.',
   },
   {
     title: '10. Children and Minors',
@@ -100,7 +100,7 @@ const SECTIONS = [
   },
   {
     title: '13. Contact',
-    contact: { email: 'privacy@dentalai.ca', org: 'Dental AI — Canada' },
+    contact: { email: 'privacy@frontdeskdentalai.com', org: 'Simplex Dental Intelligence & Reception Systems Inc., operating as Front Desk Dental AI' },
   },
 ];
 

@@ -96,7 +96,7 @@ class TestSalesContactSuccess:
         mock_notify.assert_called_once()
         kw = mock_notify.call_args.kwargs
         # Destination — SALES_NOTIFY_EMAIL default
-        assert kw["to_email"] == "sales@dentalai.ca"
+        assert kw["to_email"] == "sales@frontdeskdentalai.com"
         # Subject must include plan title and lead name
         assert "Enterprise" in kw["subject"]
         assert "Jane Smith" in kw["subject"]

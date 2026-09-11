@@ -1,7 +1,7 @@
 SUBSCRIPTION PLAN CHANGED — $practice_name
 ============================================
 
-Your Dental AI subscription plan has been updated.
+Your Front Desk Dental AI subscription plan has been updated.
 
 Previous Plan : $old_plan
 New Plan      : $new_plan

@@ -509,7 +509,7 @@ export default function LandingPage() {
                   </Link>
                 </li>
                 <li>
-                  <a href="mailto:sales@dentalai.ca" className="text-sm text-slate-400 hover:text-white transition-colors">
+                  <a href="mailto:sales@frontdeskdentalai.com" className="text-sm text-slate-400 hover:text-white transition-colors">
                     Contact
                   </a>
                 </li>
