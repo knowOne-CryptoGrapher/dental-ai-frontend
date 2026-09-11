@@ -76,6 +76,7 @@
 11. Before recording facts in this file, verify them against the live system rather than carrying forward a prior draft — several figures in earlier drafts of this doc (DB counts, index counts, revision/commit hashes) were stale by the time they were written down. Treat this file as a snapshot with a timestamp, not a permanent truth.
 12. Update this file at the end of every task, not just at the end of a session — standing requirement as of 2026-08-07, don't wait to be asked.
 13. Report in full detail, not summarized — show exact code/config found (not paraphrased), exact commands run and their raw output, exact error messages, and reasoning for any judgment calls made along the way, not just conclusions. If something is uncertain or was inferred rather than directly confirmed, say so explicitly rather than stating it as fact. Flag anything unexpected immediately rather than folding it silently into a later summary. Standing requirement as of 2026-08-07.
+14. Any legal/compliance gap identified during any future task gets added to `legal_review_bundle/LEGAL_REVIEW_QUEUE.md` immediately, as part of that task — not just mentioned in the session's chat output. Same standing/automatic status as Rule 12 (HANDOFF.md updates). Standing requirement as of 2026-09-11.
 
 ---
 
