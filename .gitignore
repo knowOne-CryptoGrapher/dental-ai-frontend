@@ -4,6 +4,7 @@ node_modules/
 # Legal / privileged material — must never be committed
 legal_review_bundle/
 legal_review_bundle.zip
+docs/compliance/anthropic/
 
 # Local dev
 .DS_Store
