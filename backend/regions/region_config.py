@@ -33,16 +33,26 @@ PROVINCE_TO_REGION: dict[str, CanadianRegion] = {
     "NU": CanadianRegion.CA_EAST,
 }
 
-# Compute region labels (for health endpoint and audit)
+# Compute region labels (for health endpoint and audit).
+# Both keys currently point at the same real region: as of 2026-09-09, all
+# compute runs in northamerica-northeast1 (Montreal) -- the ca-west/ca-east
+# split described by this module is a future plan, not yet physically
+# implemented. "northamerica-west2 (Calgary)" was never a real GCP region;
+# see backend/HANDOFF.md's Cloud Run Region Migration section.
 COMPUTE_REGION_LABELS: dict[CanadianRegion, str] = {
-    CanadianRegion.CA_WEST: "northamerica-west2 (Calgary)",
+    CanadianRegion.CA_WEST: "northamerica-northeast1 (Montreal)",
     CanadianRegion.CA_EAST: "northamerica-northeast1 (Montreal)",
 }
 
-# DB cluster labels (for health endpoint and audit)
+# DB cluster labels (for health endpoint and audit).
+# Both keys currently point at the same real, single Atlas cluster: as of
+# 2026-09-11, confirmed live in northamerica-northeast1 (Montreal) via direct
+# hello()/replSetGetConfig() query against the cluster (Atlas's own reported
+# region tag: NORTH_AMERICA_NORTHEAST_1). "atlas-ca-west"/"atlas-ca-east"
+# were never real cluster names -- there has only ever been one cluster.
 DB_CLUSTER_LABELS: dict[CanadianRegion, str] = {
-    CanadianRegion.CA_WEST: "atlas-ca-west",
-    CanadianRegion.CA_EAST: "atlas-ca-east",
+    CanadianRegion.CA_WEST: "northamerica-northeast1 (Montreal), Atlas region NORTH_AMERICA_NORTHEAST_1",
+    CanadianRegion.CA_EAST: "northamerica-northeast1 (Montreal), Atlas region NORTH_AMERICA_NORTHEAST_1",
 }
 
 
