@@ -11,7 +11,8 @@ export default function LandingFooter() {
             <p className="text-sm text-slate-400 mb-4 leading-relaxed">
               Clinical-grade AI for modern dental practices
             </p>
-            <p className="text-xs text-slate-500">© 2026 Dental AI. All rights reserved.</p>
+            <p className="text-xs text-slate-500">© 2026 Front Desk Dental AI. All rights reserved.</p>
+            <p className="text-xs text-slate-500 mt-1">Front Desk Dental AI is a product of Simplex Dental Intelligence &amp; Reception Systems Inc.</p>
           </div>
           <div>
             <p className="text-sm font-semibold text-white mb-3">Product</p>
