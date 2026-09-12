@@ -56,31 +56,23 @@ export function AuthProvider({ children }) {
   }, [token, fetchPractice]);
 
   const login = async (email, password) => {
-    try {
-      const res = await axios.post(`${API}/auth/login`, { email, password });
-      const { access_token, user: userData } = res.data;
-      // Login as a fresh user clears any leftover impersonation state
-      localStorage.removeItem(SUPER_TOKEN_KEY);
-      localStorage.setItem(TOKEN_KEY, access_token);
-      setToken(access_token); setUser(userData);
-      if (userData?.practice_id) await fetchPractice(userData.practice_id, access_token);
-      return userData;
-    } catch (err) {
-      throw new Error(err.response?.data?.detail || 'Login failed. Please try again.');
-    }
+    const res = await axios.post(`${API}/auth/login`, { email, password });
+    const { access_token, user: userData } = res.data;
+    // Login as a fresh user clears any leftover impersonation state
+    localStorage.removeItem(SUPER_TOKEN_KEY);
+    localStorage.setItem(TOKEN_KEY, access_token);
+    setToken(access_token); setUser(userData);
+    if (userData?.practice_id) await fetchPractice(userData.practice_id, access_token);
+    return userData;
   };
 
   const register = async (email, password, full_name, practice_name) => {
-    try {
-      const res = await axios.post(`${API}/auth/register`, { email, password, full_name, practice_name });
-      const { access_token, user: userData } = res.data;
-      localStorage.setItem(TOKEN_KEY, access_token);
-      setToken(access_token); setUser(userData);
-      if (userData?.practice_id) await fetchPractice(userData.practice_id, access_token);
-      return userData;
-    } catch (err) {
-      throw new Error(err.response?.data?.detail || 'Registration failed. Please try again.');
-    }
+    const res = await axios.post(`${API}/auth/register`, { email, password, full_name, practice_name });
+    const { access_token, user: userData } = res.data;
+    localStorage.setItem(TOKEN_KEY, access_token);
+    setToken(access_token); setUser(userData);
+    if (userData?.practice_id) await fetchPractice(userData.practice_id, access_token);
+    return userData;
   };
 
   const onboardPractice = async (payload) => {
