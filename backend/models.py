@@ -145,12 +145,6 @@ class UserLogin(BaseModel):
     email: str
     password: str
 
-class PasswordResetRequest(BaseModel):
-    email: EmailStr
-
-class PasswordResetConfirm(BaseModel):
-    new_password: str
-
 class SignupRequest(BaseModel):
     """Body for POST /auth/signup — creates an admin user before a practice exists."""
     email: EmailStr

@@ -25,8 +25,6 @@ import SuperAdminPracticesPage from "./pages/SuperAdminPracticesPage";
 import SuperAdminLLMPage from "./pages/SuperAdminLLMPage";
 import SuperAdminLeadsPage from "./pages/SuperAdminLeadsPage";
 import InvitePage from "./pages/InvitePage";
-import ForgotPasswordPage from "./pages/ForgotPasswordPage";
-import ResetPasswordPage from "./pages/ResetPasswordPage";
 import KnowledgeBasePage from "./pages/KnowledgeBasePage";
 import RoutingRulesPage from "./pages/RoutingRulesPage";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -164,8 +162,6 @@ function AppContent() {
       <Route path="/invite/:token" element={<InvitePage />} />
 
       <Route path="/login" element={user ? <Navigate to={homeFor()} replace /> : <LoginPage />} />
-      <Route path="/forgot-password" element={user ? <Navigate to={homeFor()} replace /> : <ForgotPasswordPage />} />
-      <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
 
       {/* Unauthenticated only — new signups */}
       <Route path="/signup" element={
