@@ -123,16 +123,16 @@ const FAQS = [
     a: 'Absolutely. You can upgrade or downgrade your plan at any time from your billing dashboard. Changes take effect immediately.',
   },
   {
-    q: 'What phone systems does Dental AI work with?',
-    a: 'Dental AI works with any phone system that supports call forwarding. No hardware changes or new equipment needed.',
+    q: 'What phone systems does Front Desk Dental AI work with?',
+    a: 'Front Desk Dental AI works with any phone system that supports call forwarding. No hardware changes or new equipment needed.',
   },
   {
     q: 'Is my patient data secure?',
-    a: 'Yes. Dental AI is built with HIPAA and PIPEDA compliance in mind — Canadian data residency, PHI redaction, audit logging, and SOC 2 security controls are standard on all plans.',
+    a: 'Yes. Front Desk Dental AI is built with HIPAA and PIPEDA compliance in mind — Canadian data residency, PHI redaction, audit logging, and SOC 2 security controls are standard on all plans.',
   },
   {
     q: 'What is CDAnet/iTRANS integration?',
-    a: "CDAnet is the Canadian Dental Association's claims network. Dental AI integrates directly for real-time insurance eligibility checks and electronic claim submission, available on Professional plans and above.",
+    a: "CDAnet is the Canadian Dental Association's claims network. Front Desk Dental AI integrates directly for real-time insurance eligibility checks and electronic claim submission, available on Professional plans and above.",
   },
   {
     q: 'How long does setup take?',

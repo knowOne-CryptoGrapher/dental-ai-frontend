@@ -101,7 +101,7 @@ export default function ClaimsPage() {
     return (
       <FeatureUpgradeCard
         featureName="Insurance Claims"
-        description="Submit and track CDAnet dental insurance claims directly from Dental AI."
+        description="Submit and track CDAnet dental insurance claims directly from Front Desk Dental AI."
         bullets={[
           'CDAnet claim submission',
           'Real-time claim status tracking',

@@ -133,7 +133,7 @@ export default function InvitePage() {
         <div className="text-center space-y-1">
           <div className="flex items-center justify-center gap-2 mb-3">
             <ShieldCheck className="w-7 h-7 text-teal-600" />
-            <span className="text-xl font-bold text-gray-900">FrontDesk Dental AI</span>
+            <span className="text-xl font-bold text-gray-900">Front Desk Dental AI</span>
           </div>
           <h1 className="text-2xl font-bold text-gray-900">You've been invited</h1>
           <p className="text-sm text-gray-500">

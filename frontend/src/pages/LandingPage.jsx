@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Phone, ShieldCheck, Globe, MapPin, BarChart2, Menu, X, ChevronRight } from 'lucide-react';
 import FeatureCard from '../components/landing/FeatureCard';
-import TestimonialCard from '../components/landing/TestimonialCard';
 import PricingPreviewCard from '../components/landing/PricingPreviewCard';
 import StepCard from '../components/landing/StepCard';
 import ContactSalesModal from '../components/sales/ContactSalesModal';
@@ -42,7 +41,7 @@ const STEPS = [
     number: '01',
     title: 'Connect Your Phone System',
     description:
-      'Forward your existing clinic number to Dental AI. Works with any phone provider — no hardware changes needed.',
+      'Forward your existing clinic number to Front Desk Dental AI. Works with any phone provider — no hardware changes needed.',
   },
   {
     number: '02',
@@ -110,30 +109,6 @@ const PLANS = [
 // Founding Clinic rate overlay — Basic only. Independent literal, not derived from `price` above.
 const FOUNDING_BASIC_PRICE = { price: '$299', regular: '$499' };
 
-const TESTIMONIALS = [
-  {
-    quote:
-      'Dental AI handles over 80% of our incoming calls without any staff involvement. Our front desk team now focuses entirely on in-clinic patients.',
-    name: 'Dr. Sarah Mitchell',
-    title: 'Owner',
-    clinic: 'Mitchell Family Dental, Vancouver BC',
-  },
-  {
-    quote:
-      'The insurance verification alone saves us 2–3 hours per day. CDAnet integration was seamless and our claim rejection rate dropped immediately.',
-    name: 'Dr. James Okafor',
-    title: 'Practice Manager',
-    clinic: 'Okafor Dental Group, Toronto ON',
-  },
-  {
-    quote:
-      'We run four locations and Dental AI gives us one unified view of everything. Routing rules let us customize how each location handles after-hours calls.',
-    name: 'Dr. Priya Sharma',
-    title: 'Clinical Director',
-    clinic: 'Sharma Dental Network, Calgary AB',
-  },
-];
-
 export default function LandingPage() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [salesModal, setSalesModal] = useState({ open: false, plan: 'enterprise' });
@@ -172,7 +147,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link to="/" className="text-xl font-bold text-teal-600 tracking-tight">
-              Dental AI
+              Front Desk Dental AI
             </Link>
 
             <div className="hidden md:flex items-center gap-6">
@@ -326,7 +301,7 @@ export default function LandingPage() {
               Everything your front desk does — handled automatically
             </h2>
             <p className="text-slate-600 max-w-2xl mx-auto leading-relaxed">
-              Dental AI answers every call, qualifies patients, books appointments, and verifies insurance without lifting a finger.
+              Front Desk Dental AI answers every call, qualifies patients, books appointments, and verifies insurance without lifting a finger.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -405,28 +380,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── TESTIMONIALS ── */}
-      <section className="bg-white py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-slate-900 mb-4">
-              Trusted by dental practices across Canada
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {TESTIMONIALS.map((t) => (
-              <TestimonialCard
-                key={t.name}
-                quote={t.quote}
-                name={t.name}
-                title={t.title}
-                clinic={t.clinic}
-              />
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* ── CTA BANNER ── */}
       <section className="bg-teal-600 py-20">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -434,7 +387,7 @@ export default function LandingPage() {
             Ready to transform your front desk?
           </h2>
           <p className="text-teal-100 text-lg leading-relaxed mb-8 max-w-2xl mx-auto">
-            Join dental practices across Canada using Dental AI to handle calls, bookings, and insurance — around the clock.
+            Join dental practices across Canada using Front Desk Dental AI to handle calls, bookings, and insurance — around the clock.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link
@@ -469,11 +422,12 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
-              <p className="text-xl font-bold text-white mb-2">Dental AI</p>
+              <p className="text-xl font-bold text-white mb-2">Front Desk Dental AI</p>
               <p className="text-sm text-slate-400 mb-4 leading-relaxed">
                 Clinical-grade AI for modern dental practices
               </p>
-              <p className="text-xs text-slate-500">© 2026 Dental AI. All rights reserved.</p>
+              <p className="text-xs text-slate-500">© 2026 Front Desk Dental AI. All rights reserved.</p>
+              <p className="text-xs text-slate-500 mt-1">Front Desk Dental AI is a product of Simplex Dental Intelligence &amp; Reception Systems Inc.</p>
             </div>
             <div>
               <p className="text-sm font-semibold text-white mb-3">Product</p>

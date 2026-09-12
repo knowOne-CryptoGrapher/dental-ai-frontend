@@ -46,7 +46,7 @@ export default function LoginPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Stethoscope className="w-6 h-6 text-blue-600" />
-            Dental AI
+            Front Desk Dental AI
           </CardTitle>
           <CardDescription>
             {isRegister ? 'Create your practice account' : 'Sign in to your account'}

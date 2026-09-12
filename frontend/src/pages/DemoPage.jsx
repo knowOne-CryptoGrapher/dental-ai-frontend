@@ -52,9 +52,9 @@ export default function DemoPage() {
       <section className="bg-slate-50 border-b border-slate-200 py-14">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl">
-            <h1 className="text-4xl font-bold text-slate-900 mb-4">See Dental AI in Action</h1>
+            <h1 className="text-4xl font-bold text-slate-900 mb-4">See Front Desk Dental AI in Action</h1>
             <p className="text-lg text-slate-600 leading-relaxed mb-6">
-              Book a personalized 30-minute demo with our team. We'll show you exactly how Dental AI
+              Book a personalized 30-minute demo with our team. We'll show you exactly how Front Desk Dental AI
               works for your practice.
             </p>
             <div className="flex flex-col sm:flex-row gap-5">
@@ -195,16 +195,6 @@ export default function DemoPage() {
                   ))}
                 </ul>
               </div>
-
-              <blockquote className="border-l-4 border-teal-500 pl-5 py-1">
-                <p className="text-sm text-slate-700 leading-relaxed italic mb-3">
-                  "The demo sold us in 20 minutes. We were live within the week."
-                </p>
-                <footer>
-                  <span className="text-xs font-semibold text-slate-900">Dr. Sarah Mitchell</span>
-                  <span className="text-xs text-slate-500"> · Mitchell Family Dental</span>
-                </footer>
-              </blockquote>
             </div>
 
           </div>
