@@ -124,7 +124,7 @@ export default function SalesLeadForm({ requestedPlan, onSuccess }) {
       </Field>
 
       <button type="submit" disabled={submitting}
-        className="w-full bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white font-semibold py-3 rounded-md transition-colors text-sm">
+        className="w-full grad-shift hover:opacity-90 disabled:opacity-60 text-white font-semibold py-3 rounded-md transition-all text-sm">
         {submitting ? 'Sending…' : 'Send Message'}
       </button>
     </form>

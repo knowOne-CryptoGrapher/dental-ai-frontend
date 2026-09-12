@@ -22,7 +22,7 @@ export default function LandingNavbar() {
             </Link>
             <Link
               to="/pricing"
-              className="bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-4 py-2 rounded-md transition-colors"
+              className="grad-shift hover:opacity-90 text-white text-sm font-semibold px-4 py-2 rounded-md transition-all"
             >
               Start Free Trial
             </Link>
@@ -55,7 +55,7 @@ export default function LandingNavbar() {
             </Link>
             <Link
               to="/pricing"
-              className="block bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-4 py-2.5 rounded-md transition-colors text-center"
+              className="block grad-shift hover:opacity-90 text-white text-sm font-semibold px-4 py-2.5 rounded-md transition-all text-center"
               onClick={() => setMobileOpen(false)}
             >
               Start Free Trial

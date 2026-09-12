@@ -92,7 +92,7 @@ export default function DemoPage() {
                   </p>
                   <Link
                     to="/pricing"
-                    className="inline-block bg-brand-600 hover:bg-brand-700 text-white font-semibold px-6 py-2.5 rounded-md transition-colors text-sm"
+                    className="inline-block grad-shift hover:opacity-90 text-white font-semibold px-6 py-2.5 rounded-md transition-all text-sm"
                   >
                     View Pricing
                   </Link>
@@ -174,7 +174,7 @@ export default function DemoPage() {
 
                   <button
                     type="submit"
-                    className="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 rounded-md transition-colors text-sm"
+                    className="w-full grad-shift hover:opacity-90 text-white font-semibold py-3 rounded-md transition-all text-sm"
                   >
                     Book My Demo
                   </button>

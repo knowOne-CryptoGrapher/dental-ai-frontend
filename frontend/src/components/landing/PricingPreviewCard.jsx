@@ -18,11 +18,11 @@ export default function PricingPreviewCard({
   const cardStyle = isElite ? { border: '2px solid #D4AF37' } : {};
 
   const ctaClass = [
-    'block text-center py-2.5 px-4 rounded-md text-sm font-semibold transition-colors',
+    'block text-center py-2.5 px-4 rounded-md text-sm font-semibold transition-all',
     isElite
       ? 'text-white hover:opacity-90'
       : isPopular
-      ? 'bg-brand-600 hover:bg-brand-700 text-white'
+      ? 'grad-shift hover:opacity-90 text-white'
       : 'border border-brand-600 text-brand-600 hover:bg-brand-50',
   ].join(' ');
 

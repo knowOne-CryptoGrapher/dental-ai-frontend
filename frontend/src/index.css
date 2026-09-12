@@ -82,6 +82,32 @@ code {
     }
 }
 
+/* Shifting violet/magenta gradient accent — applied selectively to primary
+   CTA buttons and one hero headline span, not as a global treatment. */
+@keyframes grad-shift {
+    0%,
+    100% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+}
+
+.grad-shift {
+    background-image: linear-gradient(115deg, #7c3aed, #9d00e0, #7c3aed);
+    background-size: 200% 200%;
+    animation: grad-shift 4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .grad-shift {
+        animation: none;
+        background-image: none;
+        background-color: #7c3aed;
+    }
+}
+
 @layer base {
     [data-debug-wrapper="true"] {
         display: contents !important;

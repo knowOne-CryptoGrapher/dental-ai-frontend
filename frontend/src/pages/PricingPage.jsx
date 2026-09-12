@@ -192,7 +192,7 @@ function PlanCard({ plan, onCtaClick, onFoundingClick, foundingSpotsRemaining, s
   const ctaCls = plan.isElite
     ? 'block text-center py-2.5 px-4 rounded-md text-sm font-semibold text-white hover:opacity-90 transition-opacity'
     : plan.isPopular
-    ? 'block text-center py-2.5 px-4 rounded-md text-sm font-semibold bg-brand-600 hover:bg-brand-700 text-white transition-colors'
+    ? 'block text-center py-2.5 px-4 rounded-md text-sm font-semibold grad-shift hover:opacity-90 text-white transition-all'
     : 'block text-center py-2.5 px-4 rounded-md text-sm font-semibold border border-brand-600 text-brand-600 hover:bg-brand-50 transition-colors';
 
   return (

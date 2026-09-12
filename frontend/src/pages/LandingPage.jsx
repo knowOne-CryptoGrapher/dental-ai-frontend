@@ -159,7 +159,7 @@ export default function LandingPage() {
               </Link>
               <Link
                 to="/pricing"
-                className="bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-4 py-2 rounded-md transition-colors"
+                className="grad-shift hover:opacity-90 text-white text-sm font-semibold px-4 py-2 rounded-md transition-all"
               >
                 Start Free Trial
               </Link>
@@ -192,7 +192,7 @@ export default function LandingPage() {
               </Link>
               <Link
                 to="/pricing"
-                className="block bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-4 py-2.5 rounded-md transition-colors text-center"
+                className="block grad-shift hover:opacity-90 text-white text-sm font-semibold px-4 py-2.5 rounded-md transition-all text-center"
                 onClick={() => setMobileOpen(false)}
               >
                 Start Free Trial
@@ -208,7 +208,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-slate-900 leading-tight mb-6">
-                Your 24/7 AI Dental Receptionist
+                Your <span className="grad-shift bg-clip-text text-transparent">24/7 AI</span> Dental Receptionist
               </h1>
               <p className="text-lg text-slate-600 leading-relaxed max-w-xl mb-8">
                 Answering calls, booking appointments, verifying insurance, and managing patient flow — automatically.
@@ -216,7 +216,7 @@ export default function LandingPage() {
               <div className="flex flex-col sm:flex-row gap-3 mb-10">
                 <Link
                   to="/pricing"
-                  className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-6 py-3 rounded-md transition-colors text-center text-sm"
+                  className="grad-shift hover:opacity-90 text-white font-semibold px-6 py-3 rounded-md transition-all text-center text-sm"
                 >
                   Start Free Trial
                 </Link>
