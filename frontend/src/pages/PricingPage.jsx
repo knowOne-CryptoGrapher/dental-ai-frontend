@@ -146,7 +146,7 @@ function Cell({ value, isEliteCol }) {
   if (value === true) {
     return (
       <span className="flex justify-center">
-        <Check className={`w-4 h-4 ${isEliteCol ? 'text-[#b8962f]' : 'text-teal-600'}`} aria-label="Included" />
+        <Check className={`w-4 h-4 ${isEliteCol ? 'text-[#b8962f]' : 'text-brand-600'}`} aria-label="Included" />
       </span>
     );
   }
@@ -186,14 +186,14 @@ function PlanCard({ plan, onCtaClick, onFoundingClick, foundingSpotsRemaining, s
   const cardBorder = plan.isElite
     ? {}
     : plan.isPopular
-    ? 'border-2 border-teal-600'
+    ? 'border-2 border-brand-600'
     : 'border border-slate-200';
 
   const ctaCls = plan.isElite
     ? 'block text-center py-2.5 px-4 rounded-md text-sm font-semibold text-white hover:opacity-90 transition-opacity'
     : plan.isPopular
-    ? 'block text-center py-2.5 px-4 rounded-md text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white transition-colors'
-    : 'block text-center py-2.5 px-4 rounded-md text-sm font-semibold border border-teal-600 text-teal-600 hover:bg-teal-50 transition-colors';
+    ? 'block text-center py-2.5 px-4 rounded-md text-sm font-semibold bg-brand-600 hover:bg-brand-700 text-white transition-colors'
+    : 'block text-center py-2.5 px-4 rounded-md text-sm font-semibold border border-brand-600 text-brand-600 hover:bg-brand-50 transition-colors';
 
   return (
     <div
@@ -206,7 +206,7 @@ function PlanCard({ plan, onCtaClick, onFoundingClick, foundingSpotsRemaining, s
         </span>
       ) : plan.badge && (
         <span
-          className={`absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${plan.isElite ? 'text-white' : 'bg-teal-600 text-white'}`}
+          className={`absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${plan.isElite ? 'text-white' : 'bg-brand-600 text-white'}`}
           style={plan.isElite ? { backgroundColor: '#D4AF37' } : {}}
         >
           {plan.badge}
@@ -220,7 +220,7 @@ function PlanCard({ plan, onCtaClick, onFoundingClick, foundingSpotsRemaining, s
         {showFounding ? (
           <div className="flex items-baseline gap-2 flex-wrap">
             <span className="text-base text-slate-400 line-through">{FOUNDING_BASIC_PRICE.regular}</span>
-            <span className="text-3xl font-bold text-teal-700">{FOUNDING_BASIC_PRICE.price}</span>
+            <span className="text-3xl font-bold text-brand-700">{FOUNDING_BASIC_PRICE.price}</span>
             <span className="text-sm text-slate-500">/mo</span>
           </div>
         ) : (
@@ -259,7 +259,7 @@ function PlanCard({ plan, onCtaClick, onFoundingClick, foundingSpotsRemaining, s
           return (
             <li key={row.label} className="flex items-center gap-2">
               {included ? (
-                <Check className={`w-3.5 h-3.5 shrink-0 ${plan.isElite ? 'text-[#D4AF37]' : 'text-teal-500'}`} />
+                <Check className={`w-3.5 h-3.5 shrink-0 ${plan.isElite ? 'text-[#D4AF37]' : 'text-brand-500'}`} />
               ) : (
                 <X className="w-3.5 h-3.5 shrink-0 text-slate-300" />
               )}
@@ -292,13 +292,13 @@ function PlanCard({ plan, onCtaClick, onFoundingClick, foundingSpotsRemaining, s
 
       {showFounding && onFoundingClick && (
         <>
-          <div className="text-xs text-teal-600 font-medium mt-2 text-center">
+          <div className="text-xs text-brand-600 font-medium mt-2 text-center">
             🦷 First 10 clients only — {foundingSpotsRemaining} spot{foundingSpotsRemaining === 1 ? '' : 's'} left
           </div>
           <button
             type="button"
             onClick={onFoundingClick}
-            className="block w-full text-center py-2 px-4 rounded-md text-xs font-semibold border border-teal-300 text-teal-700 hover:bg-teal-50 transition-colors mt-2"
+            className="block w-full text-center py-2 px-4 rounded-md text-xs font-semibold border border-brand-300 text-brand-700 hover:bg-brand-50 transition-colors mt-2"
           >
             Apply for Founding Clinic rate
           </button>
@@ -355,15 +355,15 @@ export default function PricingPage() {
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-6">
             <div className="flex items-center gap-2 text-slate-600">
-              <CreditCard className="w-4 h-4 text-teal-500 shrink-0" />
+              <CreditCard className="w-4 h-4 text-brand-500 shrink-0" />
               <span className="text-sm">No setup fees</span>
             </div>
             <div className="flex items-center gap-2 text-slate-600">
-              <RefreshCw className="w-4 h-4 text-teal-500 shrink-0" />
+              <RefreshCw className="w-4 h-4 text-brand-500 shrink-0" />
               <span className="text-sm">Cancel anytime</span>
             </div>
             <div className="flex items-center gap-2 text-slate-600">
-              <Shield className="w-4 h-4 text-teal-500 shrink-0" />
+              <Shield className="w-4 h-4 text-brand-500 shrink-0" />
               <span className="text-sm">HIPAA & PIPEDA Ready</span>
             </div>
           </div>
@@ -488,22 +488,22 @@ export default function PricingPage() {
       </section>
 
       {/* CTA BANNER */}
-      <section className="bg-teal-600 py-20">
+      <section className="bg-brand-600 py-20">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl font-bold text-white mb-4">Ready to get started?</h2>
-          <p className="text-teal-100 text-lg leading-relaxed mb-8 max-w-xl mx-auto">
+          <p className="text-brand-100 text-lg leading-relaxed mb-8 max-w-xl mx-auto">
             Join dental practices across Canada.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link
               to="/pricing"
-              className="border-2 border-white text-white hover:bg-white hover:text-teal-600 font-semibold px-6 py-3 rounded-md transition-colors text-sm"
+              className="border-2 border-white text-white hover:bg-white hover:text-brand-600 font-semibold px-6 py-3 rounded-md transition-colors text-sm"
             >
               Start Free Trial
             </Link>
             <Link
               to="/demo"
-              className="border-2 border-white text-white hover:bg-white hover:text-teal-600 font-semibold px-6 py-3 rounded-md transition-colors text-sm"
+              className="border-2 border-white text-white hover:bg-white hover:text-brand-600 font-semibold px-6 py-3 rounded-md transition-colors text-sm"
             >
               Book a Demo
             </Link>

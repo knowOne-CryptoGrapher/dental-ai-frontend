@@ -59,11 +59,11 @@ export default function DemoPage() {
             </p>
             <div className="flex flex-col sm:flex-row gap-5">
               <div className="flex items-center gap-2 text-slate-600">
-                <Clock className="w-4 h-4 text-teal-500 shrink-0" />
+                <Clock className="w-4 h-4 text-brand-500 shrink-0" />
                 <span className="text-sm">30-minute session</span>
               </div>
               <div className="flex items-center gap-2 text-slate-600">
-                <Users className="w-4 h-4 text-teal-500 shrink-0" />
+                <Users className="w-4 h-4 text-brand-500 shrink-0" />
                 <span className="text-sm">Personalized to your practice size</span>
               </div>
             </div>
@@ -79,9 +79,9 @@ export default function DemoPage() {
             {/* LEFT — form or confirmation */}
             <div>
               {submitted ? (
-                <div className="bg-teal-50 border border-teal-200 rounded-2xl p-10 text-center">
-                  <div className="w-14 h-14 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-5">
-                    <Check className="w-7 h-7 text-teal-600" />
+                <div className="bg-brand-50 border border-brand-200 rounded-2xl p-10 text-center">
+                  <div className="w-14 h-14 bg-brand-100 rounded-full flex items-center justify-center mx-auto mb-5">
+                    <Check className="w-7 h-7 text-brand-600" />
                   </div>
                   <h2 className="text-2xl font-bold text-slate-900 mb-3">
                     We'll be in touch within 24 hours
@@ -92,7 +92,7 @@ export default function DemoPage() {
                   </p>
                   <Link
                     to="/pricing"
-                    className="inline-block bg-teal-600 hover:bg-teal-700 text-white font-semibold px-6 py-2.5 rounded-md transition-colors text-sm"
+                    className="inline-block bg-brand-600 hover:bg-brand-700 text-white font-semibold px-6 py-2.5 rounded-md transition-colors text-sm"
                   >
                     View Pricing
                   </Link>
@@ -174,7 +174,7 @@ export default function DemoPage() {
 
                   <button
                     type="submit"
-                    className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 rounded-md transition-colors text-sm"
+                    className="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 rounded-md transition-colors text-sm"
                   >
                     Book My Demo
                   </button>
@@ -189,7 +189,7 @@ export default function DemoPage() {
                 <ul className="space-y-3.5">
                   {WHAT_TO_EXPECT.map(item => (
                     <li key={item} className="flex items-start gap-3">
-                      <Check className="w-4 h-4 text-teal-500 mt-0.5 shrink-0" />
+                      <Check className="w-4 h-4 text-brand-500 mt-0.5 shrink-0" />
                       <span className="text-sm text-slate-700 leading-relaxed">{item}</span>
                     </li>
                   ))}
@@ -220,9 +220,9 @@ function Field({ label, required, error, children }) {
 }
 
 const inputCls = (error) =>
-  `w-full h-10 rounded-md border px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 transition ${
+  `w-full h-10 rounded-md border px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 transition ${
     error ? 'border-red-400' : 'border-slate-300'
   }`;
 
 const selectCls =
-  'w-full h-10 rounded-md border border-slate-300 px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white transition';
+  'w-full h-10 rounded-md border border-slate-300 px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white transition';

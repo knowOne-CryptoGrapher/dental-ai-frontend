@@ -101,8 +101,8 @@ export default function FoundingClinicModal({ isOpen, onClose }) {
         <div className="p-6 space-y-5">
           {submitted ? (
             <div className="text-center py-6">
-              <div className="w-14 h-14 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-5">
-                <Check className="w-7 h-7 text-teal-600" />
+              <div className="w-14 h-14 bg-brand-100 rounded-full flex items-center justify-center mx-auto mb-5">
+                <Check className="w-7 h-7 text-brand-600" />
               </div>
               <h3 className="text-xl font-bold text-slate-900 mb-3">
                 {isFull ? "You're on the waitlist" : "You're in!"}
@@ -112,13 +112,13 @@ export default function FoundingClinicModal({ isOpen, onClose }) {
           ) : (
             <>
               {/* Offer card */}
-              <div className="bg-teal-50 border border-teal-200 rounded-xl p-5 text-center">
+              <div className="bg-brand-50 border border-brand-200 rounded-xl p-5 text-center">
                 <div className="flex items-baseline justify-center gap-2">
-                  <span className="text-4xl font-bold text-teal-700">$299</span>
+                  <span className="text-4xl font-bold text-brand-700">$299</span>
                   <span className="text-sm text-slate-500">/mo</span>
                 </div>
                 <p className="text-sm text-slate-400 line-through mt-1">Regular price $499/mo</p>
-                <p className="text-xs font-semibold text-teal-700 mt-2">Locked for life — never increases</p>
+                <p className="text-xs font-semibold text-brand-700 mt-2">Locked for life — never increases</p>
               </div>
 
               {/* Spots counter */}
@@ -149,7 +149,7 @@ export default function FoundingClinicModal({ isOpen, onClose }) {
                     'Founding Clinic rate locked for life',
                   ].map(item => (
                     <li key={item} className="flex items-start gap-2 text-sm text-slate-600">
-                      <Check className="w-4 h-4 text-teal-500 shrink-0 mt-0.5" />
+                      <Check className="w-4 h-4 text-brand-500 shrink-0 mt-0.5" />
                       {item}
                     </li>
                   ))}
@@ -218,7 +218,7 @@ export default function FoundingClinicModal({ isOpen, onClose }) {
                 </Field>
 
                 <button type="submit" disabled={submitting}
-                  className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white font-semibold py-3 rounded-md transition-colors text-sm flex items-center justify-center gap-1.5">
+                  className="w-full bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white font-semibold py-3 rounded-md transition-colors text-sm flex items-center justify-center gap-1.5">
                   {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                   {isFull ? 'Join the Waitlist' : 'Claim Your Spot'} <ArrowRight className="w-4 h-4" />
                 </button>
@@ -248,9 +248,9 @@ function Field({ label, required, error, children }) {
 }
 
 const inputCls = (error) =>
-  `w-full h-10 rounded-md border px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 transition ${
+  `w-full h-10 rounded-md border px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 transition ${
     error ? 'border-red-400' : 'border-slate-300'
   }`;
 
 const selectCls =
-  'w-full h-10 rounded-md border border-slate-300 px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white transition';
+  'w-full h-10 rounded-md border border-slate-300 px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white transition';

@@ -29,7 +29,7 @@ export default function FoundingClinicBanner() {
 
   return (
     <>
-      <div className="bg-teal-700 text-white relative">
+      <div className="bg-brand-700 text-white relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 pr-10 flex items-center justify-center gap-3 flex-wrap text-sm">
           <span className="font-medium text-center">
             🦷 Founding Clinic Program — 10 spots, 40% off for life. BC clinics only.
@@ -44,7 +44,7 @@ export default function FoundingClinicBanner() {
         <button
           onClick={handleDismiss}
           aria-label="Dismiss banner"
-          className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-teal-100 hover:text-white hover:bg-teal-600 rounded transition-colors"
+          className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-brand-100 hover:text-white hover:bg-brand-600 rounded transition-colors"
         >
           <X className="w-4 h-4" />
         </button>

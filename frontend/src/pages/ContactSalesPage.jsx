@@ -25,11 +25,11 @@ export default function ContactSalesPage() {
             </p>
             <div className="flex flex-col sm:flex-row gap-5">
               <div className="flex items-center gap-2 text-slate-600">
-                <Clock className="w-4 h-4 text-teal-500 shrink-0" />
+                <Clock className="w-4 h-4 text-brand-500 shrink-0" />
                 <span className="text-sm">Response within 24 hours</span>
               </div>
               <div className="flex items-center gap-2 text-slate-600">
-                <ShieldCheck className="w-4 h-4 text-teal-500 shrink-0" />
+                <ShieldCheck className="w-4 h-4 text-brand-500 shrink-0" />
                 <span className="text-sm">HIPAA &amp; PIPEDA Ready</span>
               </div>
             </div>

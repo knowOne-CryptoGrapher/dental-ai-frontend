@@ -134,7 +134,7 @@ export default function PrivacyPage() {
                   <ul className="space-y-1.5">
                     {sec.bullets.map(b => (
                       <li key={b} className="flex items-start gap-2 text-slate-600 leading-relaxed">
-                        <span className="mt-2 w-1.5 h-1.5 rounded-full bg-teal-500 shrink-0" />
+                        <span className="mt-2 w-1.5 h-1.5 rounded-full bg-brand-500 shrink-0" />
                         <span>{b}</span>
                       </li>
                     ))}
@@ -147,7 +147,7 @@ export default function PrivacyPage() {
                   <div className="text-slate-600 leading-relaxed space-y-1">
                     <p>
                       Privacy Officer:{' '}
-                      <a href={`mailto:${sec.contact.email}`} className="text-teal-600 hover:underline">
+                      <a href={`mailto:${sec.contact.email}`} className="text-brand-600 hover:underline">
                         {sec.contact.email}
                       </a>
                     </p>

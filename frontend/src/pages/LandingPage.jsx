@@ -146,20 +146,20 @@ export default function LandingPage() {
       <nav className="sticky top-0 z-50 bg-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <Link to="/" className="text-xl font-bold text-teal-600 tracking-tight">
+            <Link to="/" className="text-xl font-bold text-brand-600 tracking-tight">
               Front Desk Dental AI
             </Link>
 
             <div className="hidden md:flex items-center gap-6">
-              <Link to="/pricing" className="text-sm font-medium text-slate-600 hover:text-teal-600 transition-colors">
+              <Link to="/pricing" className="text-sm font-medium text-slate-600 hover:text-brand-600 transition-colors">
                 Pricing
               </Link>
-              <Link to="/login" className="text-sm font-medium text-slate-600 hover:text-teal-600 transition-colors">
+              <Link to="/login" className="text-sm font-medium text-slate-600 hover:text-brand-600 transition-colors">
                 Login
               </Link>
               <Link
                 to="/pricing"
-                className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2 rounded-md transition-colors"
+                className="bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-4 py-2 rounded-md transition-colors"
               >
                 Start Free Trial
               </Link>
@@ -167,7 +167,7 @@ export default function LandingPage() {
 
             <button
               onClick={() => setMobileOpen(!mobileOpen)}
-              className="md:hidden p-2 text-slate-600 hover:text-teal-600 transition-colors"
+              className="md:hidden p-2 text-slate-600 hover:text-brand-600 transition-colors"
               aria-label="Toggle navigation"
             >
               {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -178,21 +178,21 @@ export default function LandingPage() {
             <div className="md:hidden py-4 border-t border-slate-100 space-y-3">
               <Link
                 to="/pricing"
-                className="block text-sm font-medium text-slate-700 hover:text-teal-600 transition-colors px-1"
+                className="block text-sm font-medium text-slate-700 hover:text-brand-600 transition-colors px-1"
                 onClick={() => setMobileOpen(false)}
               >
                 Pricing
               </Link>
               <Link
                 to="/login"
-                className="block text-sm font-medium text-slate-700 hover:text-teal-600 transition-colors px-1"
+                className="block text-sm font-medium text-slate-700 hover:text-brand-600 transition-colors px-1"
                 onClick={() => setMobileOpen(false)}
               >
                 Login
               </Link>
               <Link
                 to="/pricing"
-                className="block bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2.5 rounded-md transition-colors text-center"
+                className="block bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-4 py-2.5 rounded-md transition-colors text-center"
                 onClick={() => setMobileOpen(false)}
               >
                 Start Free Trial
@@ -216,28 +216,28 @@ export default function LandingPage() {
               <div className="flex flex-col sm:flex-row gap-3 mb-10">
                 <Link
                   to="/pricing"
-                  className="bg-teal-600 hover:bg-teal-700 text-white font-semibold px-6 py-3 rounded-md transition-colors text-center text-sm"
+                  className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-6 py-3 rounded-md transition-colors text-center text-sm"
                 >
                   Start Free Trial
                 </Link>
                 <Link
                   to="/demo"
-                  className="border border-teal-600 text-teal-600 hover:bg-teal-50 font-semibold px-6 py-3 rounded-md transition-colors text-center text-sm"
+                  className="border border-brand-600 text-brand-600 hover:bg-brand-50 font-semibold px-6 py-3 rounded-md transition-colors text-center text-sm"
                 >
                   Book a Demo
                 </Link>
               </div>
               <div className="flex flex-col sm:flex-row gap-5">
                 <div className="flex items-center gap-2 text-slate-500">
-                  <ShieldCheck className="w-4 h-4 text-teal-500 shrink-0" />
+                  <ShieldCheck className="w-4 h-4 text-brand-500 shrink-0" />
                   <span className="text-sm">HIPAA & PIPEDA Ready</span>
                 </div>
                 <div className="flex items-center gap-2 text-slate-500">
-                  <Phone className="w-4 h-4 text-teal-500 shrink-0" />
+                  <Phone className="w-4 h-4 text-brand-500 shrink-0" />
                   <span className="text-sm">Powered by Retell AI</span>
                 </div>
                 <div className="flex items-center gap-2 text-slate-500">
-                  <Globe className="w-4 h-4 text-teal-500 shrink-0" />
+                  <Globe className="w-4 h-4 text-brand-500 shrink-0" />
                   <span className="text-sm">Canadian Data Residency</span>
                 </div>
               </div>
@@ -245,20 +245,20 @@ export default function LandingPage() {
 
             {/* Hero illustration */}
             <div className="hidden lg:flex items-center justify-center">
-              <div className="w-full max-w-md h-80 bg-teal-50 rounded-2xl border border-teal-100 flex flex-col items-center justify-center gap-5 px-8">
-                <div className="flex items-center gap-3 bg-white rounded-xl px-5 py-3 shadow-sm border border-teal-100 w-full">
-                  <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center shrink-0">
-                    <Phone className="w-5 h-5 text-teal-600" />
+              <div className="w-full max-w-md h-80 bg-brand-50 rounded-2xl border border-brand-100 flex flex-col items-center justify-center gap-5 px-8">
+                <div className="flex items-center gap-3 bg-white rounded-xl px-5 py-3 shadow-sm border border-brand-100 w-full">
+                  <div className="w-10 h-10 bg-brand-100 rounded-full flex items-center justify-center shrink-0">
+                    <Phone className="w-5 h-5 text-brand-600" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-slate-800">AI Receptionist</p>
-                    <p className="text-xs text-teal-600">Answering call...</p>
+                    <p className="text-xs text-brand-600">Answering call...</p>
                   </div>
                   <div className="flex items-end gap-0.5 h-6">
                     {[0.4, 0.75, 1, 0.55, 0.85, 0.6, 0.9, 0.45].map((h, i) => (
                       <div
                         key={i}
-                        className="w-1 bg-teal-400 rounded-full"
+                        className="w-1 bg-brand-400 rounded-full"
                         style={{ height: `${h * 24}px` }}
                       />
                     ))}
@@ -281,8 +281,8 @@ export default function LandingPage() {
                     { label: 'Booked', value: '12' },
                     { label: 'Resolved', value: '94%' },
                   ].map(({ label, value }) => (
-                    <div key={label} className="bg-white rounded-lg p-2.5 text-center border border-teal-100">
-                      <p className="text-base font-bold text-teal-700">{value}</p>
+                    <div key={label} className="bg-white rounded-lg p-2.5 text-center border border-brand-100">
+                      <p className="text-base font-bold text-brand-700">{value}</p>
                       <p className="text-[10px] text-slate-500 mt-0.5">{label}</p>
                     </div>
                   ))}
@@ -323,7 +323,7 @@ export default function LandingPage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10 relative">
             <div
-              className="hidden md:block absolute h-px bg-teal-100 top-7"
+              className="hidden md:block absolute h-px bg-brand-100 top-7"
               style={{ left: '22%', right: '22%' }}
             />
             {STEPS.map((s) => (
@@ -371,7 +371,7 @@ export default function LandingPage() {
           <div className="text-center mt-8">
             <Link
               to="/pricing"
-              className="inline-flex items-center gap-1 text-teal-600 hover:text-teal-700 font-medium text-sm transition-colors"
+              className="inline-flex items-center gap-1 text-brand-600 hover:text-brand-700 font-medium text-sm transition-colors"
             >
               See full pricing comparison
               <ChevronRight className="w-4 h-4" />
@@ -381,24 +381,24 @@ export default function LandingPage() {
       </section>
 
       {/* ── CTA BANNER ── */}
-      <section className="bg-teal-600 py-20">
+      <section className="bg-brand-600 py-20">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl font-bold text-white mb-4">
             Ready to transform your front desk?
           </h2>
-          <p className="text-teal-100 text-lg leading-relaxed mb-8 max-w-2xl mx-auto">
+          <p className="text-brand-100 text-lg leading-relaxed mb-8 max-w-2xl mx-auto">
             Join dental practices across Canada using Front Desk Dental AI to handle calls, bookings, and insurance — around the clock.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link
               to="/pricing"
-              className="border-2 border-white text-white hover:bg-white hover:text-teal-600 font-semibold px-6 py-3 rounded-md transition-colors text-sm"
+              className="border-2 border-white text-white hover:bg-white hover:text-brand-600 font-semibold px-6 py-3 rounded-md transition-colors text-sm"
             >
               Start Free Trial
             </Link>
             <Link
               to="/demo"
-              className="border-2 border-white text-white hover:bg-white hover:text-teal-600 font-semibold px-6 py-3 rounded-md transition-colors text-sm"
+              className="border-2 border-white text-white hover:bg-white hover:text-brand-600 font-semibold px-6 py-3 rounded-md transition-colors text-sm"
             >
               Book a Demo
             </Link>

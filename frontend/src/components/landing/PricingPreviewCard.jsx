@@ -12,7 +12,7 @@ export default function PricingPreviewCard({
 
   const cardClass = [
     'bg-white rounded-xl p-6 flex flex-col shadow-sm relative',
-    isElite ? '' : isPopular ? 'border-2 border-teal-600' : 'border border-slate-200',
+    isElite ? '' : isPopular ? 'border-2 border-brand-600' : 'border border-slate-200',
   ].join(' ');
 
   const cardStyle = isElite ? { border: '2px solid #D4AF37' } : {};
@@ -22,8 +22,8 @@ export default function PricingPreviewCard({
     isElite
       ? 'text-white hover:opacity-90'
       : isPopular
-      ? 'bg-teal-600 hover:bg-teal-700 text-white'
-      : 'border border-teal-600 text-teal-600 hover:bg-teal-50',
+      ? 'bg-brand-600 hover:bg-brand-700 text-white'
+      : 'border border-brand-600 text-brand-600 hover:bg-brand-50',
   ].join(' ');
 
   const ctaStyle = isElite ? { backgroundColor: '#D4AF37' } : {};
@@ -36,7 +36,7 @@ export default function PricingPreviewCard({
         </span>
       ) : badge && (
         <span
-          className={`absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${isElite ? 'text-white' : 'bg-teal-600 text-white'}`}
+          className={`absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${isElite ? 'text-white' : 'bg-brand-600 text-white'}`}
           style={isElite ? { backgroundColor: '#D4AF37' } : {}}
         >
           {badge}
@@ -48,7 +48,7 @@ export default function PricingPreviewCard({
         {showFounding ? (
           <div className="flex items-baseline gap-2 flex-wrap">
             <span className="text-base text-slate-400 line-through">{foundingRegularPrice}</span>
-            <span className="text-3xl font-bold text-teal-700">{foundingPrice}</span>
+            <span className="text-3xl font-bold text-brand-700">{foundingPrice}</span>
             <span className="text-sm text-slate-500">/mo</span>
           </div>
         ) : (
@@ -68,7 +68,7 @@ export default function PricingPreviewCard({
       <ul className="space-y-2 flex-1 mb-6">
         {features.map((f, i) => (
           <li key={i} className="flex items-start gap-2">
-            <Check className={`w-4 h-4 mt-0.5 shrink-0 ${isElite ? 'text-[#D4AF37]' : 'text-teal-500'}`} />
+            <Check className={`w-4 h-4 mt-0.5 shrink-0 ${isElite ? 'text-[#D4AF37]' : 'text-brand-500'}`} />
             <span className="text-sm text-slate-600">{f}</span>
           </li>
         ))}
@@ -97,13 +97,13 @@ export default function PricingPreviewCard({
 
       {showFounding && onFoundingClick && (
         <>
-          <div className="text-xs text-teal-600 font-medium mt-2 text-center">
+          <div className="text-xs text-brand-600 font-medium mt-2 text-center">
             🦷 First 10 clients only — {foundingSpotsRemaining} spot{foundingSpotsRemaining === 1 ? '' : 's'} left
           </div>
           <button
             type="button"
             onClick={onFoundingClick}
-            className="block w-full text-center py-2 px-4 rounded-md text-xs font-semibold border border-teal-300 text-teal-700 hover:bg-teal-50 transition-colors mt-2"
+            className="block w-full text-center py-2 px-4 rounded-md text-xs font-semibold border border-brand-300 text-brand-700 hover:bg-brand-50 transition-colors mt-2"
           >
             Apply for Founding Clinic rate
           </button>

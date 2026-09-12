@@ -59,9 +59,9 @@ export default function SalesLeadForm({ requestedPlan, onSuccess }) {
 
   if (submitted) {
     return (
-      <div className="bg-teal-50 border border-teal-200 rounded-2xl p-10 text-center">
-        <div className="w-14 h-14 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-5">
-          <svg className="w-7 h-7 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="bg-brand-50 border border-brand-200 rounded-2xl p-10 text-center">
+        <div className="w-14 h-14 bg-brand-100 rounded-full flex items-center justify-center mx-auto mb-5">
+          <svg className="w-7 h-7 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
         </div>
@@ -120,11 +120,11 @@ export default function SalesLeadForm({ requestedPlan, onSuccess }) {
         <textarea value={form.message} onChange={e => set('message', e.target.value)}
           placeholder="Tell us about your practice and what you're looking for."
           rows={4}
-          className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 transition resize-none" />
+          className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 transition resize-none" />
       </Field>
 
       <button type="submit" disabled={submitting}
-        className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white font-semibold py-3 rounded-md transition-colors text-sm">
+        className="w-full bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white font-semibold py-3 rounded-md transition-colors text-sm">
         {submitting ? 'Sending…' : 'Send Message'}
       </button>
     </form>
@@ -144,9 +144,9 @@ function Field({ label, required, error, children }) {
 }
 
 const inputCls = (error) =>
-  `w-full h-10 rounded-md border px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 transition ${
+  `w-full h-10 rounded-md border px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 transition ${
     error ? 'border-red-400' : 'border-slate-300'
   }`;
 
 const selectCls =
-  'w-full h-10 rounded-md border border-slate-300 px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white transition';
+  'w-full h-10 rounded-md border border-slate-300 px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white transition';
