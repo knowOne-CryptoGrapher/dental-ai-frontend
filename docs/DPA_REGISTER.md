@@ -1,5 +1,5 @@
 # Data Processing Agreement Register
-**Last updated:** 2026-09-11
+**Last updated:** 2026-09-12
 **Jurisdiction:** Canada — PIPEDA
 
 ---
@@ -21,7 +21,7 @@
 | OpenAI | AI receptionist reasoning | Redacted prompts only | ❌ Not started | — | Required before live clinic |
 | Anthropic (Claude) | AI reasoning fallback | Redacted prompts only | ✅ Resolved — no signature needed | Sept 2026 | Anthropic confirmed their DPA is auto-incorporated into their Commercial Terms of Service; no separate execution required. Supporting compliance documentation (SOC 2/3, ISO 27001/42001, HIPAA Type 1, security whitepapers, vendor questionnaires) obtained via Trust Center under NDA — see `docs/compliance/anthropic/` (gitignored). |
 | Groq | Fast inference | Redacted prompts only | ⏳ Requested — awaiting response | Requested Sept 2026 | Request letter sent; DPA not yet confirmed |
-| Retell | Voice call handling | Caller audio + transcripts | ⏳ Requested — awaiting response | Requested Sept 2026 | Request letter sent; still highest priority — audio is PHI |
+| Retell | Voice call handling | Caller audio + transcripts | ⏳ Reply received — DPA available, not yet executed | Requested Sept 2026 · reply received Sept 2026 | Retell confirmed a standard DPA covering PIPEDA. Configurable retention (1-730 days) and a zero-retention opt-out are available in the Retell dashboard; deletion occurs within 60 days of termination; subprocessor list published at trust.retellai.com. DPA itself still needs to be executed via click-agreements.retellai.com — not yet done. Still highest priority — audio is PHI. |
 | Google Cloud | Compute + Secret Manager | Encrypted secrets only | ✅ Executed | — | GCP DPA covers Cloud Run |
 | Crisp | Live chat / customer support messaging | Potentially chat contents (PHI exposure not yet assessed) | ❌ Not started | — | Named in the live Privacy Policy §8, but had no DPA-tracking status anywhere prior to this entry — found during the 2026-09 legal-consistency audit. Confirm actual data flow/PHI exposure before treating as low-risk. |
 
@@ -29,7 +29,7 @@
 
 ## Action Items Before First Live Clinic
 
-1. **Retell** — Follow up on request letter (sent Sept 2026); execute BAA or DPA covering call audio and transcripts (highest priority — audio is PHI)
+1. **Retell** — Reply received (Sept 2026): standard DPA confirmed available, covering PIPEDA. Execute via click-agreements.retellai.com (highest priority — audio is PHI). Separately, Retell's core infrastructure is confirmed US-based — see `legal_review_bundle/LEGAL_REVIEW_QUEUE.md` for the residency flag and Darnell decision point.
 2. **OpenAI** — Execute Data Processing Addendum (platform.openai.com/docs/privacy)
 3. **Groq** — Follow up on request letter (sent Sept 2026); confirm DPA covers inference API usage with redacted health data
 
