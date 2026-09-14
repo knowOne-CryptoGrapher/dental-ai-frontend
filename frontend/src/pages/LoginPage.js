@@ -91,6 +91,11 @@ export default function LoginPage() {
                   {showPassword ? <EyeOff /> : <Eye />}
                 </button>
               </div>
+              {!isRegister && (
+                <a href="/forgot-password" className="text-blue-600 text-sm underline block text-right mt-1.5">
+                  Forgot password?
+                </a>
+              )}
             </div>
 
             {error && <p className="text-red-600 text-sm">{error}</p>}
