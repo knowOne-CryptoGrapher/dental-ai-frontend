@@ -1,7 +1,7 @@
 # PHI Data Flow Diagram
 **Applies to:** Dental AI Backend (dental-ai-backend)
 **Jurisdiction:** Canada — PIPEDA
-**Last updated:** 2026-05-30
+**Last updated:** 2026-09-14
 
 ---
 
@@ -93,8 +93,15 @@ Each practice is assigned a `home_region` at onboarding based on province:
 
 | Province | home_region | Compute | Atlas cluster |
 |---|---|---|---|
-| BC, AB, SK, MB, NT, YT | `ca-west` | northamerica-west2 (Calgary) | atlas-ca-west |
-| ON, QC, NB, NS, PE, NL, NU | `ca-east` | northamerica-northeast1 (Montreal) | atlas-ca-east |
+| BC, AB, SK, MB, NT, YT | `ca-west` | northamerica-northeast1 (Montreal) | northamerica-northeast1 (Montreal), Atlas region `NORTH_AMERICA_NORTHEAST_1` |
+| ON, QC, NB, NS, PE, NL, NU | `ca-east` | northamerica-northeast1 (Montreal) | northamerica-northeast1 (Montreal), Atlas region `NORTH_AMERICA_NORTHEAST_1` |
+
+*(As of 2026-09-09/11, both `ca-west` and `ca-east` route to the same single real region —
+`northamerica-northeast1` (Montreal), for both compute and Atlas. The two-region split this
+table describes is a future plan encoded in the routing logic
+(`backend/regions/region_config.py`), not yet physically implemented.
+`northamerica-west2 (Calgary)` was never a real GCP region and `atlas-ca-west`/`atlas-ca-east`
+were never real cluster names — see `region_config.py`'s own comments.)*
 
 PHI for a practice is always stored and processed in its assigned region.
 Cross-region data access is prevented at the DB client factory layer
@@ -106,15 +113,19 @@ are rejected with HTTP 400.
 
 ### Current deployment status
 
-| Component | Current | Target | Status |
-|---|---|---|---|
-| Cloud Run | us-west1 (Oregon) | northamerica-west2 (Calgary) | Migration required before live clinics |
-| MongoDB Atlas | TBC | atlas-ca-west + atlas-ca-east clusters | Confirm cluster region |
+**Last verified: 2026-09-14.** Both compute and database are confirmed live in Canada:
 
-### Migration to Canadian regions
+| Component | Current | Status |
+|---|---|---|
+| Cloud Run | northamerica-northeast1 (Montreal) | ✅ Live since 2026-09-09 — confirmed via `gcloud run services describe` and production `/health/ready` |
+| MongoDB Atlas | northamerica-northeast1 (Montreal), Atlas region `NORTH_AMERICA_NORTHEAST_1` | ✅ Confirmed live 2026-09-11 — migrated in-place via Atlas's native region-edit feature (same cluster, same connection string); verified via direct `hello()`/`replSetGetConfig()` query showing a genuine state-transition signature, not a cached read; post-migration data integrity check passed |
 
-Before onboarding any live clinic, complete the migration runbook in
-`docs/MIGRATION_RUNBOOK.md` (to be created when migration is executed).
+See `docs/DPA_REGISTER.md`'s "Data Residency Confirmation" section for the full evidence trail.
+
+### Migration to Canadian regions — ✅ COMPLETE (2026-09-09 compute / 2026-09-11 database)
+
+The region migration is done — see the confirmed status table above. Retained here as a
+historical note.
 
 See also: [DPA_REGISTER.md](DPA_REGISTER.md) for data residency confirmation status and action items.
 
