@@ -253,6 +253,11 @@ async def request_password_reset(request: Request, body: PasswordResetRequest):
         if user.get("practice_id"):
             practice = await db.practices.find_one({"id": user["practice_id"]}, {"_id": 0})
         branding = (practice or {}).get("settings", {}).get("branding", {})
+        practice_name = (
+            (practice or {}).get("name", "your practice")
+            if user.get("practice_id")
+            else "Front Desk Dental AI"
+        )
         await email_service.send(
             to_email=body.email,
             subject="Reset your Front Desk Dental AI password",
@@ -260,7 +265,7 @@ async def request_password_reset(request: Request, body: PasswordResetRequest):
             template_vars={
                 "reset_url": reset_url,
                 "expiry_hours": str(_PASSWORD_RESET_EXPIRY_HOURS),
-                "practice_name": (practice or {}).get("name", "your practice"),
+                "practice_name": practice_name,
             },
             practice_id=user.get("practice_id"),
             practice_branding=branding,

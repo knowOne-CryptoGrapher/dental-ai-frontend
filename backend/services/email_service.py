@@ -3,7 +3,12 @@ EmailService — sends transactional email via AWS SES v2.
 
 Design principles:
   - Never raises. All failures return False and log the reason.
-  - practice_id is required on every send. Omitting it is a bug, not a runtime error.
+  - practice_id is required on every send EXCEPT platform/system email, which opts in
+    explicitly by passing practice_id=None (e.g. password reset for a super_admin
+    account, which has no practice). Any other falsy value ("", 0) is still treated
+    as a bug — a caller that forgot to pass a real tenant id — and is blocked.
+    System-level sends fall back to generic "Front Desk Dental AI" branding via
+    _render()'s existing practice_branding=None handling.
   - Templates are loaded from backend/templates/email/ using Python string.Template.
   - SES client is initialised lazily so local-dev imports succeed even without SES vars.
   - Throttling is retried up to 3 times with exponential backoff (1s, 2s, 4s).
@@ -111,17 +116,20 @@ class EmailService:
         subject: str,
         template_name: str,
         template_vars: dict,
-        practice_id: str,
+        practice_id: str | None,
         practice_branding: dict | None = None,
         reply_to: str | None = None,
     ) -> bool:
         """
         Send a templated email via SES v2.
 
+        practice_id=None means a platform/system email (no tenant) — allowed.
+        practice_id="" or other falsy-but-not-None values are blocked as a bug.
+
         Returns True on success, False on any failure.
         Never raises — all exceptions are caught and logged.
         """
-        if not practice_id:
+        if practice_id is not None and not practice_id:
             logger.error(
                 "email_blocked_no_tenant",
                 extra={"template": template_name, "reason": "practice_id is required"},
@@ -158,7 +166,7 @@ class EmailService:
                     },
                 },
             },
-            "EmailTags": [{"Name": "practice_id", "Value": practice_id}],
+            "EmailTags": [{"Name": "practice_id", "Value": practice_id or "system"}],
         }
         if reply_to:
             kwargs["ReplyToAddresses"] = [reply_to]
