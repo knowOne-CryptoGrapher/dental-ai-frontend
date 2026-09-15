@@ -60,8 +60,9 @@ const SECTIONS = [
   },
   {
     title: '7. Data Retention',
-    body: 'You control your data retention period from your practice dashboard (default: 7 years, in line with common Canadian dental record retention expectations). After the configured retention period, data is deleted or anonymized from active systems and backups in accordance with our retention procedures.',
+    body: 'You control your data retention period from your practice dashboard while you are an active customer (default: 7 years, in line with common Canadian dental record retention expectations). After the configured retention period, data is deleted or anonymized from active systems and backups in accordance with our retention procedures.',
     body2: 'You may request deletion of specific data or your account at any time by contacting support, subject to any legal or regulatory retention requirements that apply to you as a health care provider.',
+    body3: 'This retention setting governs our own handling of your data while you use our service — it is separate from, and does not substitute for, your own independent obligations as a dental care provider to retain patient records for the period required by applicable professional regulatory requirements, which may be longer than our active-service default. You remain responsible for your own regulatory recordkeeping obligations at all times, including after termination — see our Terms of Service §10 for what happens to your data upon termination and how to request an export.',
   },
   {
     title: '8. Third-Party Services',

@@ -65,7 +65,8 @@ const SECTIONS = [
     body: 'Either you or Dental AI may terminate the service at any time. Upon termination:',
     bullets: [
       'Your access to the service will be disabled at the end of the current billing period (unless terminated for cause).',
-      'Your data will be retained for approximately 30 days, after which it will be deleted or anonymized from active systems and backups in accordance with our retention procedures, unless you request export or a different retention period consistent with applicable law and our Privacy Policy.',
+      'Your data will be retained for 90 days following termination as a grace period during which you may request an export. After this 90-day window, your data will be deleted or anonymized from active systems and backups in accordance with our retention procedures, unless a different retention period is required by applicable law or agreed in writing.',
+      'You remain responsible for maintaining any records required for your own regulatory compliance as a health care provider — for example, your professional college\'s recordkeeping requirements — beyond what we retain following termination. An export of your data is available on request during the 90-day retention window; contact support to request one.',
     ],
   },
   {
