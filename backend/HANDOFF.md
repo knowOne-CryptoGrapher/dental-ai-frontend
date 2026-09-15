@@ -239,7 +239,7 @@ Caught via direct `curl` verification before touching DNS — worth remembering 
 
 ### Pending — No Blockers ⏳
 - MongoDB backup configuration
-- Refund logic in Stripe
+- **Refund logic in Stripe** — now also blocking: the draft SLA Definition Document's §7 (Remedies) is explicitly reserved pending this (`[RESERVED — TO BE DRAFTED BY COUNSEL / PENDING REFUND INFRASTRUCTURE]`), since no service-credit/refund remedy can be honestly committed to in writing until the underlying capability to issue one actually exists. Flagged 2026-09-15 during Clinic Service Agreement/SLA drafting.
 - Data Processing Agreement draft
 - Clinic Service Agreement draft
 - **`docs/PRIVACY_POLICY.md` and `docs/TERMS_AND_CONDITIONS.md` are stale, non-identical duplicates of the live legal pages** (`PrivacyPage.jsx`, `TermsOfServicePage.jsx`) — found during the 2026-09 corporation-name/branding audit. Needs a decision (delete vs. clearly mark superseded) before lawyer review. Not resolved here — flagging as an open item for Darnell's lawyer's input.
