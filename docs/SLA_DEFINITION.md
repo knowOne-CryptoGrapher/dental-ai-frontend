@@ -68,7 +68,19 @@
 
 ## 7. Remedies
 
-**[RESERVED — TO BE DRAFTED BY COUNSEL / PENDING REFUND INFRASTRUCTURE.]** No service-credit mechanism, refund-on-SLA-breach clause, or any other remedy structure exists in code, billing logic, or documentation today — confirmed this session that Stripe refund logic itself is not implemented (`backend/HANDOFF.md`'s Pending list, updated this session to reflect that this specifically blocks this section). This section cannot be responsibly drafted until that decision is made and, if credits are involved, until the underlying billing capability to issue them actually exists.
+7.1 **Service Credits.** If the Service's actual monthly uptime falls below the target described in Section 2.1, Simplex Dental will issue the Clinic a service credit, applied to a future invoice, according to the following schedule:
+
+| Monthly Uptime | Service Credit |
+|---|---|
+| Below 99.0%, at or above 97.0% | 10% of that month's subscription fee |
+| Below 97.0%, at or above 95.0% | 25% of that month's subscription fee |
+| Below 95.0% | 50% of that month's subscription fee |
+
+7.2 **Credits, Not Refunds.** Remedies under this SLA are provided exclusively as service credits applied to a future invoice, not as cash refunds.
+
+7.3 **Claim Process.** To receive a service credit under this Section, the Clinic must submit a request to support@frontdeskdentalai.com within thirty (30) days of the end of the calendar month in which the qualifying downtime occurred, including the dates and approximate duration of the outage(s). Simplex Dental will review the request against its own uptime monitoring records (see Section 2.2) and respond within five (5) business days.
+
+7.4 **Maximum Remedy; Sole Remedy.** The maximum aggregate service credit issuable under this Section in any calendar month is fifty percent (50%) of that month's subscription fee. The service credits described in this Section are the Clinic's sole and exclusive remedy for any failure to meet the uptime target described in Section 2.
 
 ---
 
@@ -85,4 +97,4 @@
 | 5.1-5.3 | Maintenance window boilerplate, no locked number | Decision made explicitly for this document; no existing precedent found anywhere in code/docs |
 | 6.1 | Named subprocessors | `docs/DPA_REGISTER.md`, current live register |
 | 6.2 | Retell as sole call-audio handler | `docs/DPA_REGISTER.md` Retell row; consistent with this session's Retell DPA findings |
-| 7 | Reserved, blocked on refund infrastructure | `backend/HANDOFF.md` Pending list — updated this session to explicitly link this blocker to this section |
+| 7 | Service credit structure (10%/25%/50% tiers, 30-day claim window, 5-business-day response) | Darnell's proposed defaults for lawyer review, not derived from existing precedent. Deliberately structured as account credits (not cash refunds) to avoid requiring the not-yet-built refund capability — still requires a simpler, currently-also-missing "apply credit to future invoice" capability before this section is operationally live. |
