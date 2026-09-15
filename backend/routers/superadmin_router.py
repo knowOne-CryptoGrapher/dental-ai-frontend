@@ -10,15 +10,18 @@ Owner-of-the-software endpoints for the Platform Console:
 Practice admins/staff/providers cannot reach any of these routes (403).
 """
 import os
+import csv
 import uuid
 import logging
 import hashlib
+import zipfile
+from io import StringIO, BytesIO
 from typing import Optional
 from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Response, Request
 from pydantic import BaseModel, EmailStr, Field
 
-from auth import get_db, require_role, hash_password, create_access_token, log_audit_event
+from auth import get_db, require_role, hash_password, create_access_token, log_audit_event, log_security_event
 from agent.prompt_renderer import render_amanda_prompt
 from models import default_practice_settings
 from plans import is_valid_plan_id, list_plans, get_plan, DEFAULT_PLAN_ID
@@ -644,6 +647,66 @@ async def reject_founding_clinic(
         {"$set": {"status": "rejected", "rejected_at": now, "rejected_by": current_user.get("id")}}
     )
     return {"success": True, "application_id": application_id, "status": "rejected"}
+
+
+def _collection_to_csv(docs: list[dict]) -> str:
+    """Render a list of Mongo documents (no _id) to CSV text.
+    Column set is the union of keys across all docs, sorted for stability.
+    Empty input produces an empty file rather than a header-only guess.
+    """
+    if not docs:
+        return ""
+    fieldnames = sorted({key for doc in docs for key in doc.keys()})
+    buf = StringIO()
+    writer = csv.DictWriter(buf, fieldnames=fieldnames, extrasaction="ignore", restval="")
+    writer.writeheader()
+    for doc in docs:
+        writer.writerow(doc)
+    return buf.getvalue()
+
+
+@router.get("/practices/{practice_id}/export")
+async def export_practice_data(
+    practice_id: str,
+    request: Request,
+    current_user: dict = Depends(require_role("super_admin")),
+):
+    """
+    Superadmin-triggered export of a practice's own records (patients,
+    providers, appointments, call_logs) as a zip of CSVs — used for
+    post-termination data access per Terms of Service §10's 90-day
+    export window. audit_logs are deliberately excluded: they're our own
+    operational/security trail on staff actions, not the clinic's patient
+    records, and carry no PHI content (see SECURITY.md).
+    """
+    db = get_db()
+    practice = await db.practices.find_one({"id": practice_id}, {"_id": 0, "id": 1, "name": 1})
+    if not practice:
+        raise HTTPException(status_code=404, detail="Practice not found")
+
+    collections = ["patients", "providers", "appointments", "call_logs"]
+    record_counts: dict[str, int] = {}
+    zip_buf = BytesIO()
+    with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for coll_name in collections:
+            docs = await db[coll_name].find({"practice_id": practice_id}, {"_id": 0}).to_list(100000)
+            record_counts[coll_name] = len(docs)
+            zf.writestr(f"{coll_name}.csv", _collection_to_csv(docs))
+
+    await log_security_event(
+        "data_export_generated",
+        user_id=current_user.get("id"),
+        practice_id=practice_id,
+        ip_address=request.client.host if request.client else None,
+        details={"collections": collections, "record_counts": record_counts},
+    )
+
+    filename = f"{practice_id}-export-{datetime.now(timezone.utc).strftime('%Y%m%d')}.zip"
+    return Response(
+        content=zip_buf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/practices/{practice_id}/suspend")
